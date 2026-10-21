@@ -328,10 +328,15 @@ function parseBarContent(rawBar: RawBarItem, barNumber: number): BarAST {
 
   // 7. Sequential rhythmic extraction (chords and pulses)
   // Commas in iReal Pro separate beats or small chords
-  const cleanTokensText = text.replace(/,/g, ' ');
-  const rawTokens = cleanTokensText
-    .trim()
-    .split(/\s+/)
+  // In iReal Pro, passing chords are written in parentheses, e.g. p(D) or (A/C#)
+  const prepared = text
+    .replace(/,/g, ' ')
+    .replace(/\)\s*p\(/g, ') p(')
+    .replace(/\)\s*([A-Ga-gp])/g, ') $1');
+
+  const tokenRegex = /p+\([^)]+\)|\([^)]+\)|p+|[sln]?[A-G][#b]?[^,()\s]*(?:\/[A-G][#b]?)?/g;
+  const rawTokens = [...prepared.matchAll(tokenRegex)]
+    .map((m) => m[0].trim())
     .filter((t) => t.length > 0 && !/^([sln]?x|%|r)$/i.test(t));
 
   const elements: MeasureElement[] = [];
@@ -339,37 +344,83 @@ function parseBarContent(rawBar: RawBarItem, barNumber: number): BarAST {
   let pulseCount = 0;
 
   for (const token of rawTokens) {
+    // 1. Pulse with passing chord, e.g. "p(D)", "p(A/C#)", "pp(G)"
+    const pulseWithChordMatch = token.match(/^(p+)\(([^)]+)\)$/);
+    if (pulseWithChordMatch) {
+      const pCount = pulseWithChordMatch[1].length;
+      const insideChord = pulseWithChordMatch[2].trim();
+      const parsedInside = parseChordToken(insideChord);
+
+      for (let i = 0; i < pCount - 1; i++) {
+        elements.push({ type: 'pulse' });
+        pulseCount++;
+      }
+      elements.push({
+        type: 'pulse',
+        passingChord: parsedInside || undefined,
+      });
+      pulseCount++;
+      if (parsedInside) chords.push(parsedInside);
+      continue;
+    }
+
+    // 2. Standalone parenthesized passing chord, e.g. "(A/C#)"
+    const parenChordMatch = token.match(/^\(([^)]+)\)$/);
+    if (parenChordMatch) {
+      const insideChord = parenChordMatch[1].trim();
+      const parsedInside = parseChordToken(insideChord);
+      if (parsedInside) {
+        elements.push({
+          type: 'chord',
+          chord: parsedInside,
+          isPassing: true,
+        });
+        chords.push(parsedInside);
+      }
+      continue;
+    }
+
+    // 3. Plain pulse(s), e.g. "p", "pp", "ppp"
     if (/^p+$/.test(token)) {
       for (let i = 0; i < token.length; i++) {
         elements.push({ type: 'pulse' });
         pulseCount++;
       }
-    } else {
-      // Check for pulse prefixes like 'ppE-' or 'ppsE-' or 'p(D/F#)'
-      const pulsePrefixMatch = token.match(/^(p+)(.*)$/);
-      if (pulsePrefixMatch) {
-        for (let i = 0; i < pulsePrefixMatch[1].length; i++) {
-          elements.push({ type: 'pulse' });
-          pulseCount++;
-        }
-        const remaining = pulsePrefixMatch[2]
-          .replace(/^[sln()SQ]+/, '')
-          .replace(/[sln()SQ]+$/, '');
-        if (remaining) {
-          const parsed = parseChordToken(remaining);
-          if (parsed) {
-            elements.push({ type: 'chord', chord: parsed });
-            chords.push(parsed);
-          }
-        }
-      } else {
-        const clean = token.replace(/^[sln()SQ]+/, '').replace(/[sln()SQ]+$/, '');
-        const parsed = parseChordToken(clean);
-        if (parsed) {
-          elements.push({ type: 'chord', chord: parsed });
-          chords.push(parsed);
-        }
+      continue;
+    }
+
+    // 4. Pulse prefix on chord, e.g. "ppsE-" or "ppA"
+    const pulsePrefixMatch = token.match(/^(p+)(.+)$/);
+    if (pulsePrefixMatch) {
+      for (let i = 0; i < pulsePrefixMatch[1].length; i++) {
+        elements.push({ type: 'pulse' });
+        pulseCount++;
       }
+      let chordStr = pulsePrefixMatch[2];
+      let isSmall = false;
+      if (/^[sln][A-G]/.test(chordStr)) {
+        if (chordStr.startsWith('s')) isSmall = true;
+        chordStr = chordStr.slice(1);
+      }
+      const parsed = parseChordToken(chordStr);
+      if (parsed) {
+        elements.push({ type: 'chord', chord: parsed, isSmall });
+        chords.push(parsed);
+      }
+      continue;
+    }
+
+    // 5. Normal chord (optional leading size flag [sln] followed by root [A-G])
+    let chordStr = token;
+    let isSmall = false;
+    if (/^[sln][A-G]/.test(chordStr)) {
+      if (chordStr.startsWith('s')) isSmall = true;
+      chordStr = chordStr.slice(1);
+    }
+    const parsed = parseChordToken(chordStr);
+    if (parsed) {
+      elements.push({ type: 'chord', chord: parsed, isSmall });
+      chords.push(parsed);
     }
   }
 

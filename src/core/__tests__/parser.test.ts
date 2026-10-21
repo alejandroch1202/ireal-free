@@ -248,3 +248,48 @@ test('normalizeComposerName correctly inverts artist names to natural forward or
   const html = '<a href="irealb://Song=Composer==">Song</a> - Gateway Worship';
   assert.equal(normalizeComposerName('Worship Gateway', html), 'Gateway Worship');
 });
+
+test('parseIRealSong correctly extracts passing chords and pulse passing chords for Mas El Dios De Toda Gracia', () => {
+  const MAS_EL_DIOS_HTML = `<a href="irealb://Mas%20El%20Dios%20De%20Toda%20Gracia%3DWitt%20Marcos%3D%3DBallad%3DA%3D9%3D1r34LbKcu7%5D%20E%20s44AXyyX%23F%2FD%7CQyXG%3E)oajB%20artnE(30*%3C%7CQQ%7CEsuTi*%5BYDZL-%23XyQ%7CF%7CQyX-%23FZLE%20sus%7CEQyXDZL-%23F%20sus%23C%23-%20FAv*%7CYDZL-%23sus%20E-B(p)%23C%2FA(p)D(%2CpDC*%7CY%5D)%23C%2FA(%20%2C)%7CA%20FE%7CQyXXQyX%3E%2FC%23%20FtnI%20lA%20%2033*%3C%5D%20%20EsusEZL-B%20DZL-%23ro...A%7CQyXyQ%20LZY*D%3C*69%20Salida%3EAXyQ%7CGXyQ%7CD%2FF%23XyQ%7CEsus%20E%20Z%20%3DJazz-Ballad%20Swing%3D60%3D3">Mas El Dios De Toda Gracia</a>`;
+  const [songData] = extractIRealSongs(MAS_EL_DIOS_HTML);
+  const ast = parseIRealSong(songData);
+
+  assert.equal(ast.title, 'Mas El Dios De Toda Gracia');
+  assert.equal(ast.originalKey, 'A');
+
+  // Check row 0 has intact Esus (not truncated to Esu)
+  const row0Bar3 = ast.rows[0].bars[3];
+  assert.equal(row0Bar3.chords[0].displayText, 'Esus');
+  assert.equal(row0Bar3.chords[1].displayText, 'E');
+
+  // Check row 1 has F#sus and F#m
+  const row1Bar1 = ast.rows[1].bars[1];
+  assert.equal(row1Bar1.chords[0].displayText, 'F#sus');
+  assert.equal(row1Bar1.chords[1].displayText, 'F#m');
+
+  // Check row 2 bar 3 has Esus, E, and passing chord (A/C#)
+  const row2Bar3 = ast.rows[2].bars[3];
+  assert.equal(row2Bar3.elements.length, 3);
+  assert.equal(row2Bar3.elements[0].type, 'chord');
+  assert.equal((row2Bar3.elements[0] as any).chord.displayText, 'Esus');
+  assert.equal(row2Bar3.elements[1].type, 'chord');
+  assert.equal((row2Bar3.elements[1] as any).chord.displayText, 'E');
+  assert.equal(row2Bar3.elements[2].type, 'chord');
+  assert.equal((row2Bar3.elements[2] as any).isPassing, true);
+  assert.equal((row2Bar3.elements[2] as any).chord.displayText, 'A/C#');
+
+  // Check row 3 (Section C) bar 0: D, p(D), p(A/C#), p(Bm)
+  const row3Bar0 = ast.rows[3].bars[0];
+  assert.equal(row3Bar0.elements.length, 4);
+  assert.equal(row3Bar0.elements[0].type, 'chord');
+  assert.equal((row3Bar0.elements[0] as any).chord.displayText, 'D');
+
+  assert.equal(row3Bar0.elements[1].type, 'pulse');
+  assert.equal((row3Bar0.elements[1] as any).passingChord.displayText, 'D');
+
+  assert.equal(row3Bar0.elements[2].type, 'pulse');
+  assert.equal((row3Bar0.elements[2] as any).passingChord.displayText, 'A/C#');
+
+  assert.equal(row3Bar0.elements[3].type, 'pulse');
+  assert.equal((row3Bar0.elements[3] as any).passingChord.displayText, 'Bm');
+});

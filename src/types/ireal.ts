@@ -16,8 +16,8 @@ export interface ChordToken {
 }
 
 export type MeasureElement =
-  | { type: 'chord'; chord: ChordToken }
-  | { type: 'pulse' };
+  | { type: 'chord'; chord: ChordToken; isPassing?: boolean; isSmall?: boolean }
+  | { type: 'pulse'; passingChord?: ChordToken };
 
 export interface BarAST {
   id: string;

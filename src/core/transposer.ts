@@ -162,8 +162,16 @@ export function transposeSong(song: SongAST, target: number | string): SongAST {
       elements: bar.elements
         ? bar.elements.map(el =>
             el.type === 'chord'
-              ? ({ type: 'chord' as const, chord: transposeChord(el.chord, semitones, newKey) })
-              : el
+              ? {
+                  ...el,
+                  chord: transposeChord(el.chord, semitones, newKey),
+                }
+              : {
+                  ...el,
+                  passingChord: el.passingChord
+                    ? transposeChord(el.passingChord, semitones, newKey)
+                    : undefined,
+                }
           )
         : [],
     })),
@@ -178,8 +186,16 @@ export function transposeSong(song: SongAST, target: number | string): SongAST {
       elements: bar.elements
         ? bar.elements.map(el =>
             el.type === 'chord'
-              ? ({ type: 'chord' as const, chord: transposeChord(el.chord, semitones, newKey) })
-              : el
+              ? {
+                  ...el,
+                  chord: transposeChord(el.chord, semitones, newKey),
+                }
+              : {
+                  ...el,
+                  passingChord: el.passingChord
+                    ? transposeChord(el.passingChord, semitones, newKey)
+                    : undefined,
+                }
           )
         : [],
     })),

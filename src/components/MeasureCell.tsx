@@ -244,12 +244,24 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
                 if (elem.type === 'pulse') {
                   return (
                     <View key={`pulse-${idx}`} style={styles.pulseItem}>
+                      {elem.passingChord ? (
+                        <View style={styles.passingChordOnPulse}>
+                          <RenderChord
+                            chord={elem.passingChord}
+                            count={bar.elements.length}
+                            theme={theme}
+                            fontScale={fontScale}
+                            isPassing={true}
+                          />
+                        </View>
+                      ) : null}
                       <Text
                         style={[
                           styles.pulseSlashText,
                           {
                             color: theme.textSecondary,
                             fontSize: Math.round(20 * fontScale),
+                            lineHeight: Math.round(22 * fontScale),
                           },
                         ]}
                       >
@@ -259,13 +271,21 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
                   );
                 }
                 return (
-                  <RenderChord
+                  <View
                     key={`chord-${elem.chord.raw}-${idx}`}
-                    chord={elem.chord}
-                    count={bar.elements.length}
-                    theme={theme}
-                    fontScale={fontScale}
-                  />
+                    style={[
+                      elem.isPassing ? styles.standalonePassingChordItem : styles.elementChordItem,
+                    ]}
+                  >
+                    <RenderChord
+                      chord={elem.chord}
+                      count={bar.elements.length}
+                      theme={theme}
+                      fontScale={fontScale}
+                      isPassing={elem.isPassing}
+                      isSmall={elem.isSmall}
+                    />
+                  </View>
                 );
               })}
             </View>
@@ -346,9 +366,18 @@ interface RenderChordProps {
   count: number;
   theme: ThemeColors;
   fontScale: number;
+  isPassing?: boolean;
+  isSmall?: boolean;
 }
 
-const RenderChord: React.FC<RenderChordProps> = ({ chord, count, theme, fontScale }) => {
+const RenderChord: React.FC<RenderChordProps> = ({
+  chord,
+  count,
+  theme,
+  fontScale,
+  isPassing = false,
+  isSmall = false,
+}) => {
   const slashIndex = chord.displayText.indexOf('/');
   const chordPart = slashIndex >= 0 ? chord.displayText.slice(0, slashIndex) : chord.displayText;
   const bassPart = slashIndex >= 0 ? chord.displayText.slice(slashIndex) : null;
@@ -356,9 +385,21 @@ const RenderChord: React.FC<RenderChordProps> = ({ chord, count, theme, fontScal
   const root = chord.root;
   const quality = chordPart.slice(root.length);
 
-  const baseRoot = count === 1 ? 28 : count === 2 ? 21 : 16;
-  const baseQuality = count === 1 ? 17 : count === 2 ? 14 : 11;
-  const baseBass = count === 1 ? 14 : count === 2 ? 12 : 10;
+  const baseRoot = isPassing
+    ? 13
+    : isSmall
+    ? (count === 1 ? 20 : count === 2 ? 16 : 13)
+    : (count === 1 ? 28 : count === 2 ? 21 : 16);
+  const baseQuality = isPassing
+    ? 9.5
+    : isSmall
+    ? (count === 1 ? 12 : count === 2 ? 10 : 9)
+    : (count === 1 ? 17 : count === 2 ? 14 : 11);
+  const baseBass = isPassing
+    ? 9
+    : isSmall
+    ? (count === 1 ? 10 : count === 2 ? 9 : 8)
+    : (count === 1 ? 14 : count === 2 ? 12 : 10);
 
   const rootSize = Math.round(baseRoot * fontScale);
   const qualitySize = Math.round(baseQuality * fontScale);
@@ -371,7 +412,7 @@ const RenderChord: React.FC<RenderChordProps> = ({ chord, count, theme, fontScal
 
     // Diagonal Slash Chord: Root on upper-left, /Bass on lower-right (like the % symbol)
     return (
-      <View style={styles.slashChordDiagonal}>
+      <View style={[styles.slashChordDiagonal, isPassing && styles.passingSlashChord]}>
         <View style={styles.rootQualityRow}>
           <Text style={[styles.chordRoot, { fontSize: rootSize, color: theme.chordRoot }]}>
             {root}
@@ -396,7 +437,7 @@ const RenderChord: React.FC<RenderChordProps> = ({ chord, count, theme, fontScal
   }
 
   return (
-    <View style={styles.chordWrapper}>
+    <View style={[styles.chordWrapper, isPassing && styles.passingChordWrapper]}>
       <Text style={styles.chordText} numberOfLines={1}>
         <Text style={[styles.chordRoot, { fontSize: rootSize, color: theme.chordRoot }]}>
           {root}
@@ -468,8 +509,9 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-around',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     paddingHorizontal: 1,
+    paddingBottom: 3,
   },
   chordsRowSingle: {
     justifyContent: 'center',
@@ -518,9 +560,30 @@ const styles = StyleSheet.create({
     marginRight: 3,
   },
   pulseItem: {
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     paddingHorizontal: 2,
+    minWidth: 16,
+  },
+  passingChordOnPulse: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  standalonePassingChordItem: {
+    alignSelf: 'flex-start',
+    marginTop: 2,
+    marginLeft: 2,
+  },
+  elementChordItem: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  passingSlashChord: {
+    opacity: 0.95,
+  },
+  passingChordWrapper: {
+    opacity: 0.95,
   },
   pulseSlashText: {
     fontWeight: '900',

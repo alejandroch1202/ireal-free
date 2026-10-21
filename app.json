@@ -7,15 +7,6 @@
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#151e25"
-    },
-    "androidNavigationBar": {
-      "barStyle": "light-content",
-      "backgroundColor": "#151e25"
-    },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -24,7 +15,9 @@
             "CFBundleTypeName": "HTML Document",
             "CFBundleTypeRole": "Viewer",
             "LSHandlerRank": "Alternate",
-            "LSItemContentTypes": ["public.html"]
+            "LSItemContentTypes": [
+              "public.html"
+            ]
           }
         ]
       }
@@ -106,7 +99,25 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-status-bar"
-    ]
+      "expo-status-bar",
+      "expo-font",
+      "expo-asset",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#151e25"
+        }
+      ],
+      "expo-sharing"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d1cb69c3-7215-40b1-a7ae-f4cdaba9dabf"
+      }
+    },
+    "owner": "alejandroch1202"
   }
 }
