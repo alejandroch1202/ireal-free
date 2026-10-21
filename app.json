@@ -1,0 +1,112 @@
+{
+  "expo": {
+    "name": "iReal Free",
+    "slug": "ireal-free",
+    "version": "1.0.0",
+    "scheme": "irealb",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#151e25"
+    },
+    "androidNavigationBar": {
+      "barStyle": "light-content",
+      "backgroundColor": "#151e25"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "HTML Document",
+            "CFBundleTypeRole": "Viewer",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": ["public.html"]
+          }
+        ]
+      }
+    },
+    "android": {
+      "package": "com.irealfree.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "category": [
+            "DEFAULT",
+            "BROWSABLE"
+          ],
+          "data": [
+            {
+              "scheme": "irealb"
+            },
+            {
+              "scheme": "irealbook"
+            }
+          ]
+        },
+        {
+          "action": "VIEW",
+          "category": [
+            "DEFAULT",
+            "BROWSABLE"
+          ],
+          "data": [
+            {
+              "scheme": "content",
+              "mimeType": "text/html"
+            },
+            {
+              "scheme": "file",
+              "mimeType": "text/html"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "application/xhtml+xml"
+            },
+            {
+              "scheme": "file",
+              "mimeType": "application/xhtml+xml"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "text/plain",
+              "pathPattern": ".*\\.html"
+            },
+            {
+              "scheme": "file",
+              "mimeType": "text/plain",
+              "pathPattern": ".*\\.html"
+            },
+            {
+              "scheme": "content",
+              "mimeType": "*/*",
+              "pathPattern": ".*\\.html"
+            },
+            {
+              "scheme": "file",
+              "mimeType": "*/*",
+              "pathPattern": ".*\\.html"
+            }
+          ]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-status-bar"
+    ]
+  }
+}
