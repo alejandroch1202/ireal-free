@@ -11,6 +11,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { PlaylistStorage, type SavedSong, type Playlist } from '../storage/playlistStorage';
 import { extractIRealSongs } from '../core/deobfuscator';
 import { parseIRealSong } from '../core/parser';
@@ -20,7 +21,8 @@ import type { SongAST } from '../types/ireal';
 import type { ThemeColors } from '../theme/theme';
 
 interface PlaylistsModalProps {
-  visible: boolean;
+  visible?: boolean;
+  isFullScreenView?: boolean;
   theme: ThemeColors;
   onClose: () => void;
   onSelectSong: (song: SongAST, playlistId?: string) => void;
@@ -28,10 +30,15 @@ interface PlaylistsModalProps {
   songs: SavedSong[];
   onRefreshData: () => Promise<void>;
   onDeleteSong?: (songId: string) => Promise<void>;
+  activeSongTitle?: string;
+  onOpenImport?: () => void;
+  onOpenSettings?: () => void;
+  onReturnToSheet?: () => void;
 }
 
 export const PlaylistsModal: React.FC<PlaylistsModalProps> = ({
   visible,
+  isFullScreenView = false,
   theme,
   onClose,
   onSelectSong,
@@ -39,8 +46,12 @@ export const PlaylistsModal: React.FC<PlaylistsModalProps> = ({
   songs,
   onRefreshData,
   onDeleteSong,
+  activeSongTitle,
+  onOpenImport,
+  onOpenSettings,
+  onReturnToSheet,
 }) => {
-  const [activeTab, setActiveTab] = useState<'playlists' | 'songs'>('playlists');
+  const [activeTab, setActiveTab] = useState<'playlists' | 'songs'>('songs');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
   const [showAbout, setShowAbout] = useState(false);
 
@@ -153,36 +164,81 @@ export const PlaylistsModal: React.FC<PlaylistsModalProps> = ({
     return s.title.toLowerCase().includes(q) || s.composer.toLowerCase().includes(q);
   });
 
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={[styles.overlay, { backgroundColor: theme.modalOverlay }]}
-      >
-        <View
-          style={[
-            styles.modalCard,
-            { backgroundColor: theme.modalCard, borderColor: theme.modalBorder },
-          ]}
-        >
-          {/* Header */}
-          <View style={[styles.headerRow, { borderBottomColor: theme.topBarBorder }]}>
-            <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>
-              {selectedPlaylist ? selectedPlaylist.name : 'Listas y Repertorio'}
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-              <TouchableOpacity
-                onPress={() => setShowAbout(true)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                activeOpacity={0.7}
-              >
-                <Text style={{ fontSize: 16 }}>ℹ️</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={onClose} hitSlop={12} activeOpacity={0.7}>
-                <Text style={[styles.closeBtn, { color: theme.textSecondary }]}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+  const modalBody = (
+    <View
+      style={[
+        isFullScreenView ? styles.fullScreenCard : styles.modalCard,
+        {
+          backgroundColor: isFullScreenView ? theme.background : theme.modalCard,
+          borderColor: isFullScreenView ? 'transparent' : theme.modalBorder,
+        },
+      ]}
+    >
+      {/* Header */}
+      <View style={[styles.headerRow, { borderBottomColor: theme.topBarBorder }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+          {selectedPlaylistId && (
+            <TouchableOpacity
+              style={[styles.backToPlaylistsBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
+              onPress={() => setSelectedPlaylistId(null)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.backToPlaylistsText, { color: theme.textPrimary }]}>‹ Listas</Text>
+            </TouchableOpacity>
+          )}
+          <Text style={[styles.headerTitle, { color: theme.textPrimary }]} numberOfLines={1}>
+            {selectedPlaylist ? selectedPlaylist.name : 'Repertorio'}
+          </Text>
+        </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {isFullScreenView && onOpenImport && (
+            <TouchableOpacity
+              style={[styles.headerActionBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
+              onPress={onOpenImport}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+            >
+              <Feather name="plus" size={15} color={theme.textPrimary} />
+              <Text style={[styles.headerActionText, { color: theme.textPrimary }]}>Importar</Text>
+            </TouchableOpacity>
+          )}
+
+          {isFullScreenView && onOpenSettings && (
+            <TouchableOpacity
+              style={[styles.headerIconBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
+              onPress={onOpenSettings}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+              accessibilityLabel="Ajustes"
+            >
+              <Feather name="settings" size={17} color={theme.textPrimary} />
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={[styles.headerIconBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
+            onPress={() => setShowAbout(true)}
+            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+            activeOpacity={0.7}
+            accessibilityLabel="Acerca de"
+          >
+            <Feather name="info" size={17} color={theme.textPrimary} />
+          </TouchableOpacity>
+
+          {!isFullScreenView && (
+            <TouchableOpacity
+              style={[styles.headerIconBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
+              onPress={onClose}
+              hitSlop={12}
+              activeOpacity={0.7}
+              accessibilityLabel="Cerrar"
+            >
+              <Feather name="x" size={18} color={theme.textSecondary} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
 
           {/* Sub-dialog: Add Song to Playlist */}
           {songToAddToPlaylist ? (
@@ -207,14 +263,21 @@ export const PlaylistsModal: React.FC<PlaylistsModalProps> = ({
                       <Text style={[styles.playlistSelectName, { color: theme.textPrimary }]}>
                         {pl.name}
                       </Text>
-                      <Text
-                        style={[
-                          styles.playlistSelectStatus,
-                          { color: alreadyIn ? theme.textSecondary : theme.activeKeyBg },
-                        ]}
-                      >
-                        {alreadyIn ? '✓ Ya agregada' : '+ Agregar'}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Feather
+                          name={alreadyIn ? 'check' : 'plus'}
+                          size={13}
+                          color={alreadyIn ? theme.textSecondary : theme.activeKeyBg}
+                        />
+                        <Text
+                          style={[
+                            styles.playlistSelectStatus,
+                            { color: alreadyIn ? theme.textSecondary : theme.activeKeyBg },
+                          ]}
+                        >
+                          {alreadyIn ? 'Ya agregada' : 'Agregar'}
+                        </Text>
+                      </View>
                     </TouchableOpacity>
                   );
                 })}
@@ -235,9 +298,12 @@ export const PlaylistsModal: React.FC<PlaylistsModalProps> = ({
                   onPress={() => setSelectedPlaylistId(null)}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.backBtnText, { color: theme.activeKeyBg }]}>
-                    ← Todas las Listas
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Feather name="chevron-left" size={16} color={theme.activeKeyBg} style={{ marginRight: 4 }} />
+                    <Text style={[styles.backBtnText, { color: theme.activeKeyBg }]}>
+                      Todas las Listas
+                    </Text>
+                  </View>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -245,7 +311,10 @@ export const PlaylistsModal: React.FC<PlaylistsModalProps> = ({
                   onPress={() => handleDeletePlaylist(selectedPlaylist.id)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.deletePlText}>Eliminar Lista</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Feather name="trash-2" size={13} color="#ef4444" style={{ marginRight: 4 }} />
+                    <Text style={styles.deletePlText}>Eliminar Lista</Text>
+                  </View>
                 </TouchableOpacity>
               </View>
 
@@ -289,28 +358,31 @@ export const PlaylistsModal: React.FC<PlaylistsModalProps> = ({
                               {song.composer} • {song.style}
                             </Text>
                           </View>
-                          <View style={[styles.keyBadge, { borderColor: theme.timeSigBorder }]}>
-                            <Text style={[styles.keyBadgeText, { color: theme.timeSigText }]}>
+                          <View style={[styles.keyBadge, { borderColor: theme.timeSigBorder, backgroundColor: theme.btnBg }]}>
+                            <Text style={[styles.keyBadgeText, { color: theme.timeSigText }]} numberOfLines={1}>
                               {song.key}
                             </Text>
                           </View>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                          style={styles.exportSongBtn}
+                          style={[styles.rowActionBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
                           onPress={() => handleExportSong(song)}
-                          hitSlop={8}
+                          hitSlop={6}
                           activeOpacity={0.7}
+                          accessibilityLabel="Exportar canción"
                         >
-                          <Text style={styles.exportSongIcon}>📤</Text>
+                          <Feather name="share-2" size={13} color={theme.textPrimary} />
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                          style={styles.removeSongBtn}
+                          style={[styles.rowActionBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
                           onPress={() => handleRemoveFromPlaylist(selectedPlaylist.id, song.id)}
-                          hitSlop={8}
+                          hitSlop={6}
+                          activeOpacity={0.7}
+                          accessibilityLabel="Quitar de lista"
                         >
-                          <Text style={styles.removeSongText}>✕</Text>
+                          <Feather name="trash-2" size={13} color="#ef4444" />
                         </TouchableOpacity>
                       </View>
                     );
@@ -326,45 +398,71 @@ export const PlaylistsModal: React.FC<PlaylistsModalProps> = ({
                 <TouchableOpacity
                   style={[
                     styles.tabItem,
-                    activeTab === 'playlists' && { backgroundColor: theme.activeKeyBg },
+                    activeTab === 'songs' && { backgroundColor: theme.activeKeyBg },
                   ]}
-                  onPress={() => setActiveTab('playlists')}
+                  onPress={() => setActiveTab('songs')}
+                  activeOpacity={0.7}
                 >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      {
-                        color:
-                          activeTab === 'playlists'
-                            ? theme.activeKeyText
-                            : theme.textSecondary,
-                      },
-                    ]}
-                  >
-                    📋 Listas ({playlists.length})
-                  </Text>
+                  <View style={styles.tabItemInner}>
+                    <Feather
+                      name="music"
+                      size={14}
+                      color={
+                        activeTab === 'songs'
+                          ? theme.activeKeyText
+                          : theme.textSecondary
+                      }
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text
+                      style={[
+                        styles.tabText,
+                        {
+                          color:
+                            activeTab === 'songs'
+                              ? theme.activeKeyText
+                              : theme.textSecondary,
+                        },
+                      ]}
+                    >
+                      Canciones ({songs.length})
+                    </Text>
+                  </View>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[
                     styles.tabItem,
-                    activeTab === 'songs' && { backgroundColor: theme.activeKeyBg },
+                    activeTab === 'playlists' && { backgroundColor: theme.activeKeyBg },
                   ]}
-                  onPress={() => setActiveTab('songs')}
+                  onPress={() => setActiveTab('playlists')}
+                  activeOpacity={0.7}
                 >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      {
-                        color:
-                          activeTab === 'songs'
-                            ? theme.activeKeyText
-                            : theme.textSecondary,
-                      },
-                    ]}
-                  >
-                    🎵 Canciones ({songs.length})
-                  </Text>
+                  <View style={styles.tabItemInner}>
+                    <Feather
+                      name="list"
+                      size={14}
+                      color={
+                        activeTab === 'playlists'
+                          ? theme.activeKeyText
+                          : theme.textSecondary
+                      }
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text
+                      style={[
+                        styles.tabText,
+                        {
+                          color:
+                            activeTab === 'playlists'
+                              ? theme.activeKeyText
+                              : theme.textSecondary,
+                        },
+                      ]}
+                    >
+                      Listas ({playlists.length})
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               </View>
 
@@ -399,8 +497,9 @@ export const PlaylistsModal: React.FC<PlaylistsModalProps> = ({
                       <TouchableOpacity
                         style={styles.createCancelBtn}
                         onPress={() => setIsCreatingPlaylist(false)}
+                        hitSlop={8}
                       >
-                        <Text style={{ color: theme.textSecondary }}>✕</Text>
+                        <Feather name="x" size={16} color={theme.textSecondary} />
                       </TouchableOpacity>
                     </View>
                   ) : (
@@ -409,131 +508,216 @@ export const PlaylistsModal: React.FC<PlaylistsModalProps> = ({
                       onPress={() => setIsCreatingPlaylist(true)}
                       activeOpacity={0.7}
                     >
-                      <Text style={[styles.addPlaylistText, { color: theme.activeKeyBg }]}>
-                        + Crear Nueva Lista
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Feather name="plus" size={16} color={theme.activeKeyBg} style={{ marginRight: 6 }} />
+                        <Text style={[styles.addPlaylistText, { color: theme.activeKeyBg }]}>
+                          Crear Nueva Lista
+                        </Text>
+                      </View>
                     </TouchableOpacity>
                   )}
 
-                  <ScrollView style={styles.scrollList}>
-                    {playlists.map((pl) => (
-                      <TouchableOpacity
-                        key={pl.id}
-                        style={[
-                          styles.playlistCard,
-                          {
-                            backgroundColor: theme.cardBackground,
-                            borderColor: theme.rowBorder,
-                          },
-                        ]}
-                        onPress={() => setSelectedPlaylistId(pl.id)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.playlistCardName, { color: theme.textPrimary }]}>
-                            {pl.name}
-                          </Text>
-                          <Text
-                            style={[styles.playlistCardSub, { color: theme.textSecondary }]}
-                          >
-                            {pl.songIds.length} canciones
-                          </Text>
-                        </View>
-                        <Text style={[styles.chevron, { color: theme.textSecondary }]}>›</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                  {playlists.length === 0 ? (
+                    <View style={styles.emptyContainer}>
+                      <Feather name="list" size={38} color={theme.textSecondary} style={{ marginBottom: 12 }} />
+                      <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>
+                        No hay listas creadas
+                      </Text>
+                      <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
+                        Toca "Crear Nueva Lista" para agrupar canciones de tus conciertos o ensayos.
+                      </Text>
+                    </View>
+                  ) : (
+                    <ScrollView style={styles.scrollList}>
+                      {playlists.map((pl) => (
+                        <TouchableOpacity
+                          key={pl.id}
+                          style={[
+                            styles.playlistCard,
+                            {
+                              backgroundColor: theme.cardBackground,
+                              borderColor: theme.rowBorder,
+                            },
+                          ]}
+                          onPress={() => setSelectedPlaylistId(pl.id)}
+                          activeOpacity={0.7}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.playlistCardName, { color: theme.textPrimary }]}>
+                              {pl.name}
+                            </Text>
+                            <Text
+                              style={[styles.playlistCardSub, { color: theme.textSecondary }]}
+                            >
+                              {pl.songIds.length} canciones
+                            </Text>
+                          </View>
+                          <Feather name="chevron-right" size={18} color={theme.textSecondary} />
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  )}
                 </View>
               ) : (
                 /* Tab 2: All Songs Library */
                 <View style={{ flex: 1 }}>
-                  {/* Search bar */}
-                  <TextInput
+                  {/* Modern Search bar */}
+                  <View
                     style={[
-                      styles.searchInput,
+                      styles.searchContainer,
                       {
                         backgroundColor: theme.cardBackground,
-                        color: theme.textPrimary,
                         borderColor: theme.btnBorder,
                       },
                     ]}
-                    placeholder="🔍 Buscar por título o compositor..."
-                    placeholderTextColor={theme.textSecondary}
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                  />
+                  >
+                    <Feather name="search" size={16} color={theme.textSecondary} style={{ marginRight: 8 }} />
+                    <TextInput
+                      style={[styles.searchInput, { color: theme.textPrimary }]}
+                      placeholder="Buscar por título o compositor..."
+                      placeholderTextColor={theme.textSecondary}
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                    />
+                    {searchQuery.length > 0 && (
+                      <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
+                        <Feather name="x" size={16} color={theme.textSecondary} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
 
-                  <ScrollView style={styles.scrollList}>
-                    {filteredSongs.map((song) => (
-                      <View
-                        key={song.id}
-                        style={[
-                          styles.songRow,
-                          {
-                            backgroundColor: theme.cardBackground,
-                            borderColor: theme.rowBorder,
-                          },
-                        ]}
-                      >
+                  {filteredSongs.length === 0 ? (
+                    <View style={styles.emptyContainer}>
+                      <Feather
+                        name={searchQuery ? 'search' : 'music'}
+                        size={38}
+                        color={theme.textSecondary}
+                        style={{ marginBottom: 12 }}
+                      />
+                      <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>
+                        {searchQuery ? 'Sin resultados' : 'Tu repertorio está vacío'}
+                      </Text>
+                      <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
+                        {searchQuery
+                          ? `No encontramos canciones con "${searchQuery}".`
+                          : 'Toca "+ Importar" arriba para agregar archivos HTML o enlaces de canciones en formato iReal.'}
+                      </Text>
+                      {!searchQuery && onOpenImport && (
                         <TouchableOpacity
-                          style={styles.songRowContent}
-                          onPress={() => handleLoadSavedSong(song)}
-                          activeOpacity={0.7}
+                          style={[styles.emptyImportBtn, { backgroundColor: theme.activeKeyBg || '#0284c7' }]}
+                          onPress={onOpenImport}
+                          activeOpacity={0.8}
                         >
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.songTitle, { color: theme.textPrimary }]}>
-                              {song.title}
-                            </Text>
-                            <Text style={[styles.songMeta, { color: theme.textSecondary }]}>
-                              {song.composer} • {song.style}
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Feather name="plus" size={15} color={theme.activeKeyText || '#ffffff'} style={{ marginRight: 6 }} />
+                            <Text style={[styles.emptyImportBtnText, { color: theme.activeKeyText || '#ffffff' }]}>
+                              Importar Canciones
                             </Text>
                           </View>
-                          <View
-                            style={[styles.keyBadge, { borderColor: theme.timeSigBorder }]}
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ) : (
+                    <ScrollView style={styles.scrollList}>
+                      {filteredSongs.map((song) => (
+                        <View
+                          key={song.id}
+                          style={[
+                            styles.songRow,
+                            {
+                              backgroundColor: theme.cardBackground,
+                              borderColor: theme.rowBorder,
+                            },
+                          ]}
+                        >
+                          <TouchableOpacity
+                            style={styles.songRowContent}
+                            onPress={() => handleLoadSavedSong(song)}
+                            activeOpacity={0.7}
                           >
-                            <Text
-                              style={[styles.keyBadgeText, { color: theme.timeSigText }]}
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.songTitle, { color: theme.textPrimary }]}>
+                                {song.title}
+                              </Text>
+                              <Text style={[styles.songMeta, { color: theme.textSecondary }]}>
+                                {song.composer} • {song.style}
+                              </Text>
+                            </View>
+                            <View
+                              style={[styles.keyBadge, { borderColor: theme.timeSigBorder, backgroundColor: theme.btnBg }]}
                             >
-                              {song.key}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
+                              <Text
+                                style={[styles.keyBadgeText, { color: theme.timeSigText }]}
+                                numberOfLines={1}
+                              >
+                                {song.key}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
 
-                        {/* Export as .html */}
-                        <TouchableOpacity
-                          style={styles.exportSongBtn}
-                          onPress={() => handleExportSong(song)}
-                          hitSlop={8}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.exportSongIcon}>📤</Text>
-                        </TouchableOpacity>
+                          {/* Export as .html */}
+                          <TouchableOpacity
+                            style={[styles.rowActionBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
+                            onPress={() => handleExportSong(song)}
+                            hitSlop={6}
+                            activeOpacity={0.7}
+                            accessibilityLabel="Exportar canción"
+                          >
+                            <Feather name="share-2" size={13} color={theme.textPrimary} />
+                          </TouchableOpacity>
 
-                        {/* Add to Playlist button */}
-                        <TouchableOpacity
-                          style={styles.addToListBtn}
-                          onPress={() => setSongToAddToPlaylist(song)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.addToListText}>+ Lista</Text>
-                        </TouchableOpacity>
+                          {/* Add to Playlist button */}
+                          <TouchableOpacity
+                            style={[styles.rowActionBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
+                            onPress={() => setSongToAddToPlaylist(song)}
+                            hitSlop={6}
+                            activeOpacity={0.7}
+                            accessibilityLabel="Agregar a lista"
+                          >
+                            <Feather name="folder-plus" size={13} color={theme.textPrimary} />
+                          </TouchableOpacity>
 
-                        {/* Delete from library */}
-                        <TouchableOpacity
-                          style={styles.deleteSongBtn}
-                          onPress={() => handleConfirmDeleteSong(song)}
-                          hitSlop={8}
-                        >
-                          <Text style={styles.deleteSongText}>🗑️</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  </ScrollView>
+                          {/* Delete from library */}
+                          <TouchableOpacity
+                            style={[styles.rowActionBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
+                            onPress={() => handleConfirmDeleteSong(song)}
+                            hitSlop={6}
+                            activeOpacity={0.7}
+                            accessibilityLabel="Eliminar canción"
+                          >
+                            <Feather name="trash-2" size={13} color="#ef4444" />
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  )}
                 </View>
               )}
             </View>
           )}
         </View>
+  );
+
+  if (isFullScreenView) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
+        {modalBody}
+        <AboutModal
+          visible={showAbout}
+          onClose={() => setShowAbout(false)}
+          theme={theme}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <Modal visible={Boolean(visible)} transparent animationType="fade" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={[styles.overlay, { backgroundColor: theme.modalOverlay }]}
+      >
+        {modalBody}
       </KeyboardAvoidingView>
 
       {/* About Modal Dialog */}
@@ -566,6 +750,55 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 10,
   },
+  fullScreenCard: {
+    flex: 1,
+    width: '100%',
+    paddingHorizontal: 14,
+    paddingTop: 10,
+  },
+  backToPlaylistsBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  backToPlaylistsText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  returnToSheetBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  returnToSheetText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  headerActionBtn: {
+    height: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+  },
+  headerActionText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  headerIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -593,9 +826,15 @@ const styles = StyleSheet.create({
   },
   tabItem: {
     flex: 1,
-    paddingVertical: 7,
+    paddingVertical: 8,
     alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 6,
+  },
+  tabItemInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tabText: {
     fontSize: 13,
@@ -690,30 +929,66 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   emptyContainer: {
-    padding: 24,
+    paddingVertical: 40,
+    paddingHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  emptyIcon: {
+    fontSize: 42,
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginBottom: 18,
+    maxWidth: 280,
+  },
+  emptyImportBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  emptyImportBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
   },
   emptyText: {
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 18,
   },
-  searchInput: {
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
+    paddingHorizontal: 10,
+    height: 40,
     marginBottom: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    height: '100%',
+    padding: 0,
   },
   songRow: {
     borderWidth: 1,
     borderRadius: 8,
-    padding: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 6,
+    gap: 6,
   },
   songRowContent: {
     flex: 1,
@@ -734,52 +1009,26 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   keyBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     borderWidth: 1,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginRight: 8,
-  },
-  keyBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  exportSongBtn: {
-    paddingHorizontal: 7,
-    paddingVertical: 5,
-    borderRadius: 6,
-    marginRight: 6,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 4,
   },
-  exportSongIcon: {
-    fontSize: 14,
-  },
-  addToListBtn: {
-    backgroundColor: '#334155',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginRight: 6,
-  },
-  addToListText: {
-    color: '#f8fafc',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  removeSongBtn: {
-    padding: 6,
-  },
-  removeSongText: {
-    color: '#ef4444',
-    fontSize: 14,
+  keyBadgeText: {
+    fontSize: 11.5,
     fontWeight: '800',
+    textAlign: 'center',
   },
-  deleteSongBtn: {
-    padding: 6,
-  },
-  deleteSongText: {
-    fontSize: 14,
+  rowActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   subModalContainer: {
     flex: 1,

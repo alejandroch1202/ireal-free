@@ -8,6 +8,7 @@ import {
   ScrollView,
   Linking,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import type { ThemeColors } from '../theme/theme';
 
 interface AboutModalProps {
@@ -48,10 +49,11 @@ export const AboutModal: React.FC<AboutModalProps> = ({ visible, onClose, theme 
                 { backgroundColor: theme.btnBg, borderColor: theme.btnBorder },
               ]}
               onPress={onClose}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              hitSlop={8}
               activeOpacity={0.7}
+              accessibilityLabel="Cerrar"
             >
-              <Text style={[styles.closeBtnText, { color: theme.textSecondary }]}>✕</Text>
+              <Feather name="x" size={17} color={theme.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -64,7 +66,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ visible, onClose, theme 
                   { backgroundColor: isDark ? '#1e293b' : '#e0f2fe', borderColor: '#0284c7' },
                 ]}
               >
-                <Text style={styles.iconEmoji}>🎼</Text>
+                <Feather name="music" size={28} color="#0284c7" />
               </View>
 
               <Text style={[styles.appName, { color: theme.textPrimary }]}>iReal Free</Text>
@@ -84,7 +86,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ visible, onClose, theme 
               onPress={handleOpenWebsite}
               activeOpacity={0.7}
             >
-              <Text style={styles.devRowIcon}>🌐</Text>
+              <Feather name="globe" size={18} color={theme.activeKeyBg || '#0284c7'} style={{ marginRight: 2 }} />
               <View style={styles.devRowTextCol}>
                 <Text style={[styles.devRowTitle, { color: theme.textPrimary }]}>
                   Desarrollado por alejandroch.com
@@ -93,7 +95,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ visible, onClose, theme 
                   Toca para visitar el sitio web
                 </Text>
               </View>
-              <Text style={styles.devRowLink}>↗</Text>
+              <Feather name="external-link" size={15} color="#0284c7" />
             </TouchableOpacity>
 
             {/* Key Features */}
@@ -103,7 +105,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ visible, onClose, theme 
               </Text>
 
               <View style={styles.featureItem}>
-                <Text style={styles.featureBullet}>🎵</Text>
+                <Feather name="file-text" size={16} color={isDark ? '#38bdf8' : '#0284c7'} style={styles.featureIcon} />
                 <View style={styles.featureTextCol}>
                   <Text style={[styles.featureHeading, { color: theme.textPrimary }]}>
                     Compatibilidad Lead Sheet
@@ -115,7 +117,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ visible, onClose, theme 
               </View>
 
               <View style={styles.featureItem}>
-                <Text style={styles.featureBullet}>🔄</Text>
+                <Feather name="repeat" size={16} color={isDark ? '#38bdf8' : '#0284c7'} style={styles.featureIcon} />
                 <View style={styles.featureTextCol}>
                   <Text style={[styles.featureHeading, { color: theme.textPrimary }]}>
                     Transposición en los 12 tonos
@@ -127,7 +129,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ visible, onClose, theme 
               </View>
 
               <View style={styles.featureItem}>
-                <Text style={styles.featureBullet}>⏱️</Text>
+                <Feather name="clock" size={16} color={isDark ? '#38bdf8' : '#0284c7'} style={styles.featureIcon} />
                 <View style={styles.featureTextCol}>
                   <Text style={[styles.featureHeading, { color: theme.textPrimary }]}>
                     Metrónomo Visual & Tap Tempo
@@ -139,7 +141,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ visible, onClose, theme 
               </View>
 
               <View style={styles.featureItem}>
-                <Text style={styles.featureBullet}>🔒</Text>
+                <Feather name="shield" size={16} color={isDark ? '#38bdf8' : '#0284c7'} style={styles.featureIcon} />
                 <View style={styles.featureTextCol}>
                   <Text style={[styles.featureHeading, { color: theme.textPrimary }]}>
                     100% Offline & Sin Anuncios
@@ -205,7 +207,7 @@ const styles = StyleSheet.create({
   closeBtn: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: 8,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -305,8 +307,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 9,
   },
-  featureBullet: {
-    fontSize: 15,
+  featureIcon: {
     marginRight: 9,
     marginTop: 1,
   },

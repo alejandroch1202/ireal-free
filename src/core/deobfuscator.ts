@@ -44,11 +44,18 @@ export function deobfuscateChordString(obfuscated: string): string {
   if (text.startsWith(OBFUSCATION_PREFIX)) {
     text = text.slice(OBFUSCATION_PREFIX.length);
 
-    // 2. Process in chunks of 50 characters
-    let unhussled = '';
+    // 2. Process in chunks of 50 characters:
+    // In iReal Pro (see pianosnake/ireal-reader, daumling/ireal-renderer & ironss/accompaniser reference implementations),
+    // a 50-character block is ONLY scrambled if followed by a subsequent chunk of length > 1.
+    // The final chunk (or tail with remaining length <= 1) is never scrambled.
+    const chunks: string[] = [];
     for (let i = 0; i < text.length; i += 50) {
-      const chunk = text.slice(i, i + 50);
-      unhussled += hussle(chunk);
+      chunks.push(text.slice(i, i + 50));
+    }
+    let unhussled = '';
+    for (let i = 0; i < chunks.length; i++) {
+      const isScrambled = (i + 1 < chunks.length) && (chunks[i + 1].length > 1);
+      unhussled += isScrambled ? hussle(chunks[i]) : chunks[i];
     }
     text = unhussled;
   }
@@ -115,20 +122,26 @@ export function extractIRealSongs(input: string): ParsedIRealUrlResult[] {
 
   let raw = input.trim();
 
-  // Unescape HTML entities like &amp; or &quot;
-  raw = raw.replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+  // Unescape HTML entities like &amp;, &quot;, &#39;, &apos;, &lt;, &gt;
+  raw = raw
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
 
   // If inside an HTML <a> tag or href attribute
-  const hrefMatch = raw.match(/href=["']([^"']*(?:irealb|irealbook):\/\/[^"']+)["']/i);
+  const hrefMatch = raw.match(/href=["']([^"']*(?:ireal|irealb|irealbook):\/\/[^"']+)["']/i);
   if (hrefMatch) {
     raw = hrefMatch[1];
   } else {
-    // If irealb:// appears somewhere in the text, extract from it
-    const schemeIdx = raw.search(/(?:irealb|irealbook):\/\//i);
+    // If ireal://, irealb://, or irealbook:// appears somewhere in the text, extract from it
+    const schemeIdx = raw.search(/(?:ireal|irealb|irealbook):\/\//i);
     if (schemeIdx !== -1) {
       // Extract until next quote, whitespace or end of string
       const remainder = raw.slice(schemeIdx);
-      const endMatch = remainder.match(/(?:irealb|irealbook):\/\/[^\s"'>]+/i);
+      const endMatch = remainder.match(/(?:ireal|irealb|irealbook):\/\/[^\s"'>]+/i);
       if (endMatch) {
         raw = endMatch[0];
       }
@@ -143,6 +156,8 @@ export function extractIRealSongs(input: string): ParsedIRealUrlResult[] {
     raw = raw.slice('irealb://'.length);
   } else if (raw.startsWith('irealbook://')) {
     raw = raw.slice('irealbook://'.length);
+  } else if (raw.startsWith('ireal://')) {
+    raw = raw.slice('ireal://'.length);
   }
 
   // Decode URI components (safely)

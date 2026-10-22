@@ -24,8 +24,8 @@ export interface BarAST {
   barNumber: number;
   /** Left barline token: '|', '{' (repeat start), '[' (section start) */
   leftBarline: '|' | '{' | '[';
-  /** Right barline token: '|', '}' (repeat end), ']' (section end), 'Z' (final barline) */
-  rightBarline: '|' | '}' | ']' | 'Z';
+  /** Right barline token: '|', '}' (repeat end), ']' (section end), 'Z' (final barline), '||' (double barline) */
+  rightBarline: '|' | '}' | ']' | 'Z' | '||';
   /** Rehearsal mark / section label if this bar starts a section (e.g. "Intro", "Verso", "Coro", "A", "B") */
   sectionLabel?: string;
   /** Section letter for boxed icon (e.g. "I", "V", "C", "B") */

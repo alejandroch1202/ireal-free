@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import type { SongAST } from '../types/ireal';
 import type { ThemeColors } from '../theme/theme';
 
@@ -9,12 +10,14 @@ interface TopBarProps {
   theme: ThemeColors;
   hasPrevSong: boolean;
   hasNextSong: boolean;
-  onTransposeStep: (step: number) => void;
+  onTransposeStep?: (step: number) => void;
   onOpenSettings: () => void;
   onOpenPlaylists: () => void;
   onPrevSong: () => void;
   onNextSong: () => void;
-  onToggleFullScreen: () => void;
+  onToggleFullScreen?: () => void;
+  onBackToLibrary?: () => void;
+  onOpenEditSong?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -23,21 +26,13 @@ export const TopBar: React.FC<TopBarProps> = ({
   theme,
   hasPrevSong,
   hasNextSong,
-  onTransposeStep,
   onOpenSettings,
   onOpenPlaylists,
   onPrevSong,
   onNextSong,
-  onToggleFullScreen,
+  onBackToLibrary,
 }) => {
   const isTransposed = song.transposeAmount !== 0;
-
-  // Compact metadata string (e.g. "Pop • ♩115 • 4/4")
-  const metaParts: string[] = [];
-  if (song.style) metaParts.push(song.style);
-  if (song.tempo) metaParts.push(`♩${song.tempo}`);
-  if (song.timeSignature) metaParts.push(song.timeSignature);
-  const metaString = metaParts.join(' • ');
 
   return (
     <View
@@ -49,137 +44,130 @@ export const TopBar: React.FC<TopBarProps> = ({
         },
       ]}
     >
-      {/* Left: Previous Song Navigation Arrow ‹ */}
+      {/* 1. Left: Mobile Back Button (‹) */}
       <TouchableOpacity
         style={[
-          styles.songNavBtn,
+          styles.actionBtn,
           { backgroundColor: theme.btnBg, borderColor: theme.btnBorder },
-          !hasPrevSong && styles.btnDisabled,
         ]}
-        onPress={onPrevSong}
-        disabled={!hasPrevSong}
+        onPress={onBackToLibrary || onOpenPlaylists}
         activeOpacity={0.7}
-        hitSlop={{ top: 8, bottom: 8, left: 6, right: 4 }}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        accessibilityLabel="Volver a canciones"
       >
-        <Text
-          style={[
-            styles.songNavText,
-            { color: hasPrevSong ? theme.textPrimary : theme.textSecondary },
-          ]}
-        >
-          ‹
-        </Text>
+        <Feather name="chevron-left" size={21} color={theme.activeKeyBg || '#0284c7'} />
       </TouchableOpacity>
 
-      {/* Center: Clickable Song Info Area (Opens Playlists & Library directly) */}
+      {/* 2. Center: Song Title & Composer (Clean, uncluttered, maximum readability) */}
       <TouchableOpacity
         style={styles.infoColBtn}
         onPress={onOpenPlaylists}
         activeOpacity={0.7}
-        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-      >
-        <View style={styles.titleRow}>
-          <Text style={[styles.title, { color: theme.textPrimary }]} numberOfLines={1}>
-            {song.title}
-          </Text>
-          <View
-            style={[
-              styles.playlistIndicatorBadge,
-              { backgroundColor: theme.btnBg, borderColor: theme.btnBorder },
-            ]}
-          >
-            <Text style={[styles.playlistIndicatorText, { color: theme.activeKeyBg || '#0284c7' }]}>
-              ▼
-            </Text>
-          </View>
-        </View>
-        <Text style={[styles.metaText, { color: theme.textSecondary }]} numberOfLines={1}>
-          {metaString || 'Toca para cambiar canción'}
-        </Text>
-      </TouchableOpacity>
-
-      {/* Next Song Navigation Arrow › */}
-      <TouchableOpacity
-        style={[
-          styles.songNavBtn,
-          { backgroundColor: theme.btnBg, borderColor: theme.btnBorder },
-          !hasNextSong && styles.btnDisabled,
-        ]}
-        onPress={onNextSong}
-        disabled={!hasNextSong}
-        activeOpacity={0.7}
-        hitSlop={{ top: 8, bottom: 8, left: 4, right: 6 }}
+        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+        accessibilityLabel="Abrir repertorio de canciones"
       >
         <Text
-          style={[
-            styles.songNavText,
-            { color: hasNextSong ? theme.textPrimary : theme.textSecondary },
-          ]}
+          style={[styles.title, { color: theme.textPrimary }]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
         >
-          ›
+          {song.title || 'Sin Título'}
         </Text>
+        {Boolean(song.composer) && (
+          <Text
+            style={[styles.composerText, { color: theme.textSecondary }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {song.composer}
+          </Text>
+        )}
       </TouchableOpacity>
 
-      {/* Right: Quick Transpose Stepper, Full-Screen & Settings Button */}
+      {/* 3. Right: Prev/Next Song navigation, Key Badge & Settings Menu */}
       <View style={styles.controlsRow}>
-        {/* Step Down -1 */}
+        {/* Previous Song */}
         <TouchableOpacity
-          style={[styles.stepBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
-          onPress={() => onTransposeStep(-1)}
-          activeOpacity={0.6}
-          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+          style={[
+            styles.navArrowBtn,
+            { backgroundColor: theme.btnBg, borderColor: theme.btnBorder },
+            !hasPrevSong && styles.btnDisabled,
+          ]}
+          onPress={onPrevSong}
+          disabled={!hasPrevSong}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 2 }}
+          accessibilityLabel="Canción anterior"
         >
-          <Text style={[styles.stepBtnText, { color: theme.btnText }]}>-</Text>
+          <Feather
+            name="chevron-left"
+            size={18}
+            color={hasPrevSong ? theme.textPrimary : theme.textSecondary}
+          />
         </TouchableOpacity>
 
-        {/* Current Key Pill (shows original key if transposed) */}
+        {/* Next Song */}
+        <TouchableOpacity
+          style={[
+            styles.navArrowBtn,
+            { backgroundColor: theme.btnBg, borderColor: theme.btnBorder },
+            !hasNextSong && styles.btnDisabled,
+          ]}
+          onPress={onNextSong}
+          disabled={!hasNextSong}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 2, right: 4 }}
+          accessibilityLabel="Canción siguiente"
+        >
+          <Feather
+            name="chevron-right"
+            size={18}
+            color={hasNextSong ? theme.textPrimary : theme.textSecondary}
+          />
+        </TouchableOpacity>
+
+        {/* Current Key Pill (Tap opens Transposition / Settings menu) */}
         <TouchableOpacity
           style={[
             styles.keyPill,
             { backgroundColor: theme.btnBg, borderColor: theme.timeSigBorder },
-            isTransposed && styles.keyPillTransposed,
+            isTransposed && {
+              backgroundColor: theme.mode === 'dark' ? '#3b2505' : '#fffbeb',
+              borderColor: '#f59e0b',
+            },
           ]}
           onPress={onOpenSettings}
           activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+          accessibilityLabel={`Tonalidad: ${song.currentKey}. Toca para cambiar tono.`}
         >
-          <Text style={[styles.keyPillText, { color: theme.timeSigText }]}>
+          <Text
+            style={[
+              styles.keyPillText,
+              { color: isTransposed ? '#f59e0b' : theme.timeSigText },
+            ]}
+          >
             {song.currentKey}
           </Text>
           {isTransposed && (
-            <Text style={styles.origKeySubText}>
+            <Text style={[styles.origKeySubText, { color: '#f59e0b' }]}>
               ({originalKey})
             </Text>
           )}
         </TouchableOpacity>
 
-        {/* Step Up +1 */}
+        {/* Settings Menu Button */}
         <TouchableOpacity
-          style={[styles.stepBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
-          onPress={() => onTransposeStep(1)}
-          activeOpacity={0.6}
-          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-        >
-          <Text style={[styles.stepBtnText, { color: theme.btnText }]}>+</Text>
-        </TouchableOpacity>
-
-        {/* Full Screen Mode Toggle Button */}
-        <TouchableOpacity
-          style={[styles.iconBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
-          onPress={onToggleFullScreen}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-        >
-          <Text style={[styles.iconBtnText, { color: theme.textPrimary }]}>⛶</Text>
-        </TouchableOpacity>
-
-        {/* Unified Settings & Controls Menu Button */}
-        <TouchableOpacity
-          style={[styles.iconBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
+          style={[
+            styles.actionBtn,
+            { backgroundColor: theme.btnBg, borderColor: theme.btnBorder },
+          ]}
           onPress={onOpenSettings}
           activeOpacity={0.7}
           hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+          accessibilityLabel="Menú y ajustes"
         >
-          <Text style={[styles.iconBtnText, { color: theme.textPrimary }]}>⚙️</Text>
+          <Feather name="settings" size={17} color={theme.textPrimary} />
         </TouchableOpacity>
       </View>
     </View>
@@ -188,109 +176,67 @@ export const TopBar: React.FC<TopBarProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    height: 50,
+    height: 52,
     borderBottomWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 8,
   },
-  songNavBtn: {
-    width: 32,
-    height: 34,
-    borderRadius: 7,
+  actionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  songNavText: {
-    fontSize: 20,
-    fontWeight: '800',
-    lineHeight: 22,
-  },
-  btnDisabled: {
-    opacity: 0.35,
   },
   infoColBtn: {
     flex: 1,
-    marginHorizontal: 6,
+    marginHorizontal: 8,
     justifyContent: 'center',
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
   title: {
-    fontSize: 14,
+    fontSize: 17,
     fontWeight: '900',
     letterSpacing: 0.1,
-    maxWidth: '82%',
   },
-  playlistIndicatorBadge: {
-    borderWidth: 1,
-    borderRadius: 3,
-    paddingHorizontal: 3,
-    paddingVertical: 1,
-  },
-  playlistIndicatorText: {
-    fontSize: 8,
-    fontWeight: '800',
-  },
-  metaText: {
-    fontSize: 9,
+  composerText: {
+    fontSize: 12,
     fontWeight: '600',
     marginTop: 1,
   },
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 5,
   },
-  stepBtn: {
-    width: 24,
-    height: 30,
-    borderRadius: 5,
+  navArrowBtn: {
+    width: 30,
+    height: 36,
+    borderRadius: 8,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepBtnText: {
-    fontSize: 15,
-    fontWeight: '800',
-    lineHeight: 18,
+  btnDisabled: {
+    opacity: 0.3,
   },
   keyPill: {
-    borderRadius: 5,
+    borderRadius: 8,
     borderWidth: 1,
-    paddingHorizontal: 6,
-    height: 30,
+    paddingHorizontal: 9,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 2,
-  },
-  keyPillTransposed: {
-    borderColor: '#e5a93b',
+    gap: 3,
   },
   keyPillText: {
-    fontSize: 12.5,
+    fontSize: 13.5,
     fontWeight: '900',
   },
   origKeySubText: {
-    fontSize: 8,
-    fontWeight: '800',
-    color: '#e5a93b',
-  },
-  iconBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 5,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconBtnText: {
-    fontSize: 14,
+    fontSize: 9.5,
+    fontWeight: '700',
   },
 });

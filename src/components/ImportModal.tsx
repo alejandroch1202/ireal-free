@@ -11,6 +11,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { extractIRealSongs } from '../core/deobfuscator';
@@ -234,8 +235,14 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         <View style={[styles.modalCard, { backgroundColor: cardBg, borderColor: theme.modalBorder }]}>
           <View style={[styles.modalHeader, { borderBottomColor: theme.topBarBorder }]}>
             <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Importar Canción</Text>
-            <TouchableOpacity onPress={handleClose} hitSlop={12}>
-              <Text style={[styles.closeBtn, { color: theme.textSecondary }]}>✕</Text>
+            <TouchableOpacity
+              style={[styles.headerCloseBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
+              onPress={handleClose}
+              hitSlop={10}
+              activeOpacity={0.7}
+              accessibilityLabel="Cerrar"
+            >
+              <Feather name="x" size={17} color={theme.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -255,9 +262,12 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                 onPress={handleImportAllPlaylistSongs}
                 activeOpacity={0.8}
               >
-                <Text style={styles.importAllBtnText}>
-                  📥 Importar Todas ({playlistSongs.length}) al Repertorio
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <Feather name="download" size={15} color="#ffffff" />
+                  <Text style={styles.importAllBtnText}>
+                    Importar Todas ({playlistSongs.length}) al Repertorio
+                  </Text>
+                </View>
               </TouchableOpacity>
               <ScrollView style={styles.playlistList}>
                 {playlistSongs.map((s, idx) => (
@@ -298,9 +308,12 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                 onPress={() => setPlaylistSongs([])}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.backBtnText, { color: isDark ? '#4daafc' : '#0284c7' }]}>
-                  ← Volver a opciones
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                  <Feather name="chevron-left" size={16} color={isDark ? '#4daafc' : '#0284c7'} />
+                  <Text style={[styles.backBtnText, { color: isDark ? '#4daafc' : '#0284c7' }]}>
+                    Volver a opciones
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
           ) : (
@@ -319,7 +332,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                   <ActivityIndicator color="#ffffff" size="small" />
                 ) : (
                   <>
-                    <Text style={styles.filePickerIcon}>📂</Text>
+                    <Feather name="folder" size={24} color="#ffffff" style={{ marginRight: 12 }} />
                     <View style={styles.filePickerTextCol}>
                       <Text style={styles.filePickerTitle}>
                         Abrir archivo(s) (.html)
@@ -362,7 +375,12 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                 }}
               />
 
-              {error && <Text style={styles.errorText}>⚠️ {error}</Text>}
+              {error && (
+                <View style={styles.errorBox}>
+                  <Feather name="alert-circle" size={14} color="#ef4444" style={{ marginRight: 6 }} />
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              )}
 
               <View style={styles.quickActions}>
                 <TouchableOpacity
@@ -376,9 +394,12 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                   onPress={handleLoadSample}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.sampleBtnText, { color: isDark ? '#4daafc' : '#0284c7' }]}>
-                    📋 Pegar Ejemplo
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Feather name="clipboard" size={13} color={isDark ? '#4daafc' : '#0284c7'} />
+                    <Text style={[styles.sampleBtnText, { color: isDark ? '#4daafc' : '#0284c7' }]}>
+                      Pegar Ejemplo
+                    </Text>
+                  </View>
                 </TouchableOpacity>
 
                 {inputText.length > 0 && (
@@ -449,9 +470,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
   },
-  closeBtn: {
-    fontSize: 18,
-    fontWeight: '700',
+  headerCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
   },
   scrollContent: {
     paddingBottom: 4,

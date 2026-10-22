@@ -1,21 +1,27 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import type { SongAST, BarAST } from '../types/ireal';
 import type { ThemeColors } from '../theme/theme';
 import { MeasureCell } from './MeasureCell';
+import { TwoMeasureRepeatCell } from './TwoMeasureRepeatCell';
 
 interface LeadSheetGridProps {
   song: SongAST;
   theme: ThemeColors;
   fontScale?: number;
+  onEditBar?: (bar: BarAST, chordIndex?: number) => void;
+  onEditSection?: (rowIndex: number, currentLabel: string) => void;
 }
 
 export const LeadSheetGrid: React.FC<LeadSheetGridProps> = ({
   song,
   theme,
   fontScale = 1.0,
+  onEditBar,
+  onEditSection,
 }) => {
-  const rowMarginBottom = Math.max(12, Math.round(20 * fontScale));
+  const rowMarginBottom = Math.max(5, Math.round(15 * fontScale));
 
   return (
     <ScrollView
@@ -49,52 +55,105 @@ export const LeadSheetGrid: React.FC<LeadSheetGridProps> = ({
         {/* Lead Sheet Rows or Empty State */}
         {song.rows.length === 0 ? (
           <View style={styles.emptySheetContainer}>
-            <Text style={styles.emptySheetIcon}>🎼</Text>
+            <Feather name="music" size={44} color={theme.textSecondary} style={{ marginBottom: 14 }} />
             <Text style={[styles.emptySheetTitle, { color: theme.textPrimary }]}>
               {song.title === 'Sin Canciones' ? 'Biblioteca Vacía' : 'Partitura sin compases'}
             </Text>
             <Text style={[styles.emptySheetSub, { color: theme.textSecondary }]}>
-              Usa el menú superior o ⚙️ para importar canciones o abrir archivos .html de iReal Pro.
+              Toca "Importar" en la parte superior para cargar canciones o abrir archivos .html de iReal Pro.
             </Text>
           </View>
         ) : (
-          song.rows.map((row) => {
-            const isDirectionBlockRow =
-              row.bars.length === 2 &&
-              row.bars.every(
-                (b) =>
-                  b.chords.length === 0 &&
-                  !b.isRepeatMeasure &&
-                  !b.isDoubleRepeatMeasure &&
-                  (b.bottomAnnotations.some((a) => /^(VERSO|CORO|FINAL)/i.test(a)) ||
-                    b.annotations.some((a) => /^(VERSO|CORO|FINAL)/i.test(a)))
-              );
+          (() => {
+            // Guarantee strictly at most 4 bars per musical line (4-column standard grid)
+            const normalizedRows: Array<{
+              rowKey: string;
+              rowIndex: number;
+              sectionLabel?: string;
+              sectionLetter?: string;
+              sectionSuffix?: string;
+              sectionSign?: 'segno' | 'coda';
+              bars: BarAST[];
+              isDirectionBlockRow: boolean;
+              isPreambleBannerRow: boolean;
+            }> = [];
 
-            const isPreambleRow = row.bars.length === 1;
+            song.rows.forEach((row) => {
+              const isDirection =
+                row.bars.length === 2 &&
+                row.bars.every(
+                  (b) =>
+                    b.chords.length === 0 &&
+                    !b.isRepeatMeasure &&
+                    !b.isDoubleRepeatMeasure &&
+                    (b.bottomAnnotations.some((a) => /^(VERSO|CORO|FINAL)/i.test(a)) ||
+                      b.annotations.some((a) => /^(VERSO|CORO|FINAL)/i.test(a)))
+                );
 
-            const colWidthPercent = isDirectionBlockRow
-              ? '50%'
-              : isPreambleRow
-              ? '100%'
-              : row.bars.length >= 5
-              ? `${Math.floor(100 / row.bars.length)}%`
-              : '25%';
+              const isPreambleBanner =
+                row.rowIndex === 0 &&
+                row.bars.length === 1 &&
+                row.bars[0].chords.length === 0 &&
+                !row.bars[0].isRepeatMeasure &&
+                row.bars[0].rightBarline === ']';
 
-            const filledBars: (BarAST | null)[] = [...row.bars];
-            if (!isDirectionBlockRow && !isPreambleRow) {
-              while (filledBars.length < 4) {
-                filledBars.push(null);
+              if (isDirection || isPreambleBanner || row.bars.length <= 4) {
+                normalizedRows.push({
+                  rowKey: `row-${row.rowIndex}`,
+                  rowIndex: row.rowIndex,
+                  sectionLabel: row.sectionLabel,
+                  sectionLetter: row.sectionLetter,
+                  sectionSuffix: row.sectionSuffix,
+                  sectionSign: row.sectionSign,
+                  bars: row.bars,
+                  isDirectionBlockRow: isDirection,
+                  isPreambleBannerRow: isPreambleBanner,
+                });
+              } else {
+                let remaining = [...row.bars];
+                let subIdx = 0;
+                while (remaining.length > 0) {
+                  const chunk = remaining.slice(0, 4);
+                  remaining = remaining.slice(4);
+                  normalizedRows.push({
+                    rowKey: `row-${row.rowIndex}-${subIdx}`,
+                    rowIndex: row.rowIndex,
+                    sectionLabel: subIdx === 0 ? row.sectionLabel : undefined,
+                    sectionLetter: subIdx === 0 ? row.sectionLetter : undefined,
+                    sectionSuffix: subIdx === 0 ? row.sectionSuffix : undefined,
+                    sectionSign: subIdx === 0 ? row.sectionSign : undefined,
+                    bars: chunk,
+                    isDirectionBlockRow: false,
+                    isPreambleBannerRow: false,
+                  });
+                  subIdx++;
+                }
               }
-            }
+            });
 
-            const hasSection = Boolean(row.sectionLetter || row.sectionLabel);
-            const sectionLetter = row.sectionLetter || (row.sectionLabel ? row.sectionLabel[0] : '');
-            const sectionSuffix =
-              row.sectionSuffix !== undefined
-                ? row.sectionSuffix
-                : row.sectionLabel
-                ? row.sectionLabel.slice(1)
-                : '';
+            return normalizedRows.map((row) => {
+              const colWidthPercent = row.isDirectionBlockRow
+                ? '50%'
+                : row.isPreambleBannerRow
+                ? '100%'
+                : '25%';
+
+              // Fill empty cells up to 4 columns to preserve clean vertical barline alignment
+              const filledBars: (BarAST | null)[] = [...row.bars];
+              if (!row.isDirectionBlockRow && !row.isPreambleBannerRow) {
+                while (filledBars.length < 4) {
+                  filledBars.push(null);
+                }
+              }
+
+              const hasSection = Boolean(row.sectionLetter || row.sectionLabel);
+              const sectionLetter = row.sectionLetter || (row.sectionLabel ? row.sectionLabel[0] : '');
+              const sectionSuffix =
+                row.sectionSuffix !== undefined
+                  ? row.sectionSuffix
+                  : row.sectionLabel
+                  ? row.sectionLabel.slice(1)
+                  : '';
 
             // Collect phrase-wide performance notes to render spanning below the measures
             const rowAnnotations: string[] = [];
@@ -120,14 +179,39 @@ export const LeadSheetGrid: React.FC<LeadSheetGridProps> = ({
             });
 
             return (
-              <View key={`row-${row.rowIndex}`} style={styles.rowWrapper}>
+              <View key={row.rowKey} style={styles.rowWrapper}>
                 {/* Clean, natural Section Mark with prominent Segno / Coda signs */}
                 {(hasSection || row.sectionSign) && (
                   <View style={styles.sectionHeaderLine}>
                     {hasSection && (
-                      <Text style={[styles.sectionTitleText, { color: theme.textPrimary }]}>
-                        {row.sectionLabel || `${sectionLetter}${sectionSuffix}`}
-                      </Text>
+                      <TouchableOpacity
+                        onPress={
+                          onEditSection
+                            ? () =>
+                                onEditSection(
+                                  row.rowIndex,
+                                  row.sectionLabel || `${sectionLetter}${sectionSuffix}`
+                                )
+                            : undefined
+                        }
+                        disabled={!onEditSection}
+                        activeOpacity={0.7}
+                        style={styles.sectionHeaderBtn}
+                        accessibilityRole={onEditSection ? 'button' : undefined}
+                        accessibilityLabel={`Editar sección ${row.sectionLabel || `${sectionLetter}${sectionSuffix}`}`}
+                      >
+                        <Text style={[styles.sectionTitleText, { color: theme.textPrimary }]}>
+                          {row.sectionLabel || `${sectionLetter}${sectionSuffix}`}
+                        </Text>
+                        {Boolean(onEditSection) && (
+                          <Feather
+                            name="edit-2"
+                            size={11}
+                            color={theme.textSecondary}
+                            style={{ marginLeft: 5, opacity: 0.7 }}
+                          />
+                        )}
+                      </TouchableOpacity>
                     )}
                     {row.sectionSign && (
                       <Text
@@ -156,32 +240,69 @@ export const LeadSheetGrid: React.FC<LeadSheetGridProps> = ({
                     },
                   ]}
                 >
-                  {filledBars.map((bar, barIndex) => {
-                    const isFirst = barIndex === 0;
-                    const isLast = barIndex === row.bars.length - 1;
+                  {(() => {
+                    const cells: React.ReactNode[] = [];
+                    for (let barIndex = 0; barIndex < filledBars.length; barIndex++) {
+                      const bar = filledBars[barIndex];
+                      const isFirst = barIndex === 0;
+                      const isLast = barIndex === row.bars.length - 1;
 
-                    if (!bar) {
-                      // Clean whitespace for incomplete rows without fake barlines
-                      return (
-                        <View
-                          key={`empty-bar-${barIndex}`}
-                          style={[styles.placeholderCell, { width: (colWidthPercent as any) }]}
+                      if (!bar) {
+                        // Clean whitespace for incomplete rows without fake barlines
+                        cells.push(
+                          <View
+                            key={`empty-bar-${barIndex}`}
+                            style={[styles.placeholderCell, { width: (colWidthPercent as any) }]}
+                          />
+                        );
+                        continue;
+                      }
+
+                      // When a two-measure repeat is present with a companion empty measure,
+                      // group them into a single 50% width unit with the simile mark centered across both
+                      const nextBar = barIndex + 1 < filledBars.length ? filledBars[barIndex + 1] : null;
+                      const canGroupDoubleRepeat =
+                        bar.isDoubleRepeatMeasure &&
+                        nextBar !== null &&
+                        nextBar.chords.length === 0 &&
+                        !nextBar.isRepeatMeasure &&
+                        !nextBar.isDoubleRepeatMeasure;
+
+                      if (canGroupDoubleRepeat && nextBar) {
+                        const isDoubleLast = (barIndex + 1) === row.bars.length - 1;
+                        const doubleColWidth = row.isDirectionBlockRow ? '100%' : '50%';
+                        cells.push(
+                          <TwoMeasureRepeatCell
+                            key={`double-repeat-${bar.id}-${nextBar.id}`}
+                            firstBar={bar}
+                            secondBar={nextBar}
+                            theme={theme}
+                            fontScale={fontScale}
+                            cellWidth={doubleColWidth}
+                            onPressBar={onEditBar}
+                            isFirstInRow={isFirst}
+                            isLastInRow={isDoubleLast}
+                          />
+                        );
+                        barIndex++; // Skip companion measure as it is rendered in TwoMeasureRepeatCell
+                        continue;
+                      }
+
+                      cells.push(
+                        <MeasureCell
+                          key={bar.id}
+                          bar={bar}
+                          isFirstInRow={isFirst}
+                          isLastInRow={isLast}
+                          theme={theme}
+                          fontScale={fontScale}
+                          cellWidth={colWidthPercent}
+                          onPressBar={onEditBar}
                         />
                       );
                     }
-
-                    return (
-                      <MeasureCell
-                        key={bar.id}
-                        bar={bar}
-                        isFirstInRow={isFirst}
-                        isLastInRow={isLast}
-                        theme={theme}
-                        fontScale={fontScale}
-                        cellWidth={colWidthPercent}
-                      />
-                    );
-                  })}
+                    return cells;
+                  })()}
                 </View>
 
                 {/* Spanning Row-Level Annotations (e.g. "(Tocar solamente una vez en la 2da vuelta)") */}
@@ -205,7 +326,8 @@ export const LeadSheetGrid: React.FC<LeadSheetGridProps> = ({
                 )}
               </View>
             );
-          })
+          });
+        })()
         )}
       </View>
     </ScrollView>
@@ -259,6 +381,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
     paddingLeft: 2,
+  },
+  sectionHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+    borderRadius: 4,
   },
   sectionTitleText: {
     fontSize: 13,

@@ -21,81 +21,46 @@ export interface Playlist {
 }
 
 const STORAGE_KEYS = {
-  INITIALIZED: '@ireal_storage_initialized_v2',
-  SONGS: '@ireal_saved_songs_v2',
-  PLAYLISTS: '@ireal_playlists_v2',
-  THEME: '@ireal_theme_mode_v1',
+  INITIALIZED: '@ireal_storage_initialized_v3',
+  SONGS: '@ireal_saved_songs_v3',
+  PLAYLISTS: '@ireal_playlists_v3',
+  THEME: '@ireal_theme_mode_v2',
   FONT_SCALE: '@ireal_font_scale_v1',
   KEEP_AWAKE: '@ireal_keep_awake_v1',
-  ACTIVE_SONG_ID: '@ireal_active_song_id_v2',
+  ACTIVE_SONG_ID: '@ireal_active_song_id_v3',
   SONG_KEYS: '@ireal_song_keys_v1',
-  DELETED_SONGS: '@ireal_deleted_song_ids_v2',
+  DELETED_SONGS: '@ireal_deleted_song_ids_v3',
 };
 
-/**
- * Initializes default songs from the bundled charts if library is brand new.
- */
-function createInitialSeed(): { songs: SavedSong[]; playlists: Playlist[] } {
-  const songs: SavedSong[] = [];
-
-  for (const seed of SEED_SONG_FILES) {
-    const extracted = extractIRealSongs(seed.content);
-    if (extracted.length > 0) {
-      const s = extracted[0];
-      songs.push({
-        id: seed.id,
-        title: s.title,
-        composer: s.composer,
-        key: s.key,
-        style: s.style,
-        tempo: s.tempo,
-        rawInput: seed.content,
-        dateAdded: Date.now(),
-      });
-    }
-  }
-
-  const defaultPlaylist: Playlist = {
-    id: 'pl-default',
-    name: 'Repertorio Principal',
-    songIds: songs.map((s) => s.id),
-    createdAt: Date.now(),
-  };
-
-  return {
-    songs,
-    playlists: [defaultPlaylist],
-  };
-}
+const SEED_IDS = new Set(['seed-hay-libertad', 'seed-venid-glorificad', 'seed-mas-el-dios']);
 
 export const PlaylistStorage = {
   /**
-   * Retrieves all saved songs, seeding defaults only on the very first launch.
+   * Retrieves all saved songs. Defaults to empty repertoire (no bundled songs).
    */
   async getSongs(): Promise<SavedSong[]> {
     try {
       const initialized = await AsyncStorage.getItem(STORAGE_KEYS.INITIALIZED);
       if (!initialized) {
-        // Also check if v1 exists for migration
-        const v1SongsJson = await AsyncStorage.getItem('@ireal_saved_songs_v1');
-        if (v1SongsJson) {
-          const v1Songs: SavedSong[] = JSON.parse(v1SongsJson);
-          const v1PlaylistsJson = await AsyncStorage.getItem('@ireal_playlists_v1');
-          const v1Playlists = v1PlaylistsJson ? JSON.parse(v1PlaylistsJson) : [];
-          await AsyncStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
-          await AsyncStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(v1Songs));
-          await AsyncStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify(v1Playlists));
-          return v1Songs;
+        // Migrate custom user-imported songs from v2 if any exist, filtering out old seed songs
+        let migratedSongs: SavedSong[] = [];
+        try {
+          const v2Json = await AsyncStorage.getItem('@ireal_saved_songs_v2');
+          if (v2Json) {
+            const v2List: SavedSong[] = JSON.parse(v2Json);
+            migratedSongs = v2List.filter((s) => !SEED_IDS.has(s.id) && !s.id.startsWith('seed-'));
+          }
+        } catch {
+          // ignore
         }
 
-        const seed = createInitialSeed();
         await AsyncStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
-        await AsyncStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(seed.songs));
-        await AsyncStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify(seed.playlists));
-        if (seed.songs.length > 0) {
-          await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_SONG_ID, seed.songs[0].id);
+        await AsyncStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(migratedSongs));
+        await AsyncStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify([]));
+        if (migratedSongs.length > 0) {
+          await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_SONG_ID, migratedSongs[0].id);
         }
-        return seed.songs;
+        return migratedSongs;
       }
 
       const json = await AsyncStorage.getItem(STORAGE_KEYS.SONGS);
@@ -140,39 +105,7 @@ export const PlaylistStorage = {
         }
       });
 
-      // Check if any newly bundled charts are missing and add them (only if NOT deleted by user)
-      let hasNewSeeds = false;
-      for (const seed of SEED_SONG_FILES) {
-        const seedTitle = seed.fileName.replace('.html', '').toLowerCase().trim();
-        if (deletedIds.includes(seed.id) || deletedIds.includes(seedTitle)) {
-          continue; // User explicitly deleted this song; DO NOT re-introduce it!
-        }
-        if (
-          !existingSongs.some(
-            (s) =>
-              s.id === seed.id ||
-              s.title.toLowerCase().trim() === seedTitle
-          )
-        ) {
-          const extracted = extractIRealSongs(seed.content);
-          if (extracted.length > 0) {
-            const s = extracted[0];
-            existingSongs.push({
-              id: seed.id,
-              title: s.title,
-              composer: s.composer,
-              key: s.key,
-              style: s.style,
-              tempo: s.tempo,
-              rawInput: seed.content,
-              dateAdded: Date.now(),
-            });
-            hasNewSeeds = true;
-          }
-        }
-      }
-
-      if (hasNewSeeds || hasNormalizedComposer) {
+      if (hasNormalizedComposer) {
         await AsyncStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(existingSongs));
       }
 
@@ -283,6 +216,27 @@ export const PlaylistStorage = {
 
     await AsyncStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(songs));
     return savedList;
+  },
+
+  /**
+   * Updates an existing song in the library by its ID.
+   */
+  async updateSong(
+    songId: string,
+    updates: Partial<Omit<SavedSong, 'id' | 'dateAdded'>>
+  ): Promise<SavedSong | null> {
+    const songs = await this.getSongs();
+    const idx = songs.findIndex((s) => s.id === songId);
+    if (idx === -1) return null;
+
+    const current = songs[idx];
+    const updatedSong: SavedSong = {
+      ...current,
+      ...updates,
+    };
+    songs[idx] = updatedSong;
+    await AsyncStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(songs));
+    return updatedSong;
   },
 
   /**
@@ -425,9 +379,9 @@ export const PlaylistStorage = {
   async getThemeMode(): Promise<'dark' | 'light'> {
     try {
       const mode = await AsyncStorage.getItem(STORAGE_KEYS.THEME);
-      return mode === 'light' ? 'light' : 'dark';
+      return mode === 'dark' ? 'dark' : 'light';
     } catch {
-      return 'dark';
+      return 'light';
     }
   },
 

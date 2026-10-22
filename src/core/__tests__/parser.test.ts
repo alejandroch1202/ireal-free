@@ -5,11 +5,21 @@ import { parseIRealSong, parseChordToken, formatChordQuality } from '../parser';
 
 const SAMPLE_HTML = `<a href="irealb://El%20Dios%20Que%20Adoramos%3DLa%20IBI%20%26%20GSM%3D%3DPop%3DG%3D4%3D1r34LbKcu7osre%2044%3C*6*%7BY%5D%20D%20GZLC%20-EQ%7CyXD%7CQyXG%3Eort%209v%3C*69Ti*%7CYp%7CQyXKcl%20L%20lcKQyXCZL%20lcKyQX-EZL%20lcKQyXDZ%20%7DY%7CCQyXG%3E-EZL%20DXyQKXDZL%20lcKQyXG%3Eoor%2096*%3CC*%7CY%5D%20%20lcyQKclZL-EpyXC%7CQXyQ%7CGL%20lcKQyXDZL%20lcQKyXG%7CQyXD%7CQyXB%2FZE-XyC%7CQyXyX-E%7CyQ%7CD%2FQyXC%3Elatnemurt%20s96*%3Ci*%7CY%5DQyX%23F%7CDXyQX-E%7CQcKQyX*03AlneuP(%20egdir%2096%3C*B*%7BY%5D%20%20%3EortnI%20te)%3EC%3C%20D%7CQOC33*XyQKcY%7D%20%20lcKQyX%23F%2FDLZ%20lcKQyXE%2FCZL%20l%7CXyQ%3CDZL%20lRO%3EXyQ%20LZXyQ%3C*36FINAL%3EXyQ%20%20Z%20%3DPop-Rock%3D115%3D3">El Dios Que Adoramos</a>`;
 
-test('formatChordQuality converts minus sign to m', () => {
+test('formatChordQuality maps iReal Pro chord qualities accurately', () => {
   assert.equal(formatChordQuality('-'), 'm');
   assert.equal(formatChordQuality('-7'), 'm7');
   assert.equal(formatChordQuality('-7b5'), 'm7b5');
+  assert.equal(formatChordQuality('^'), 'maj7');
   assert.equal(formatChordQuality('^7'), 'maj7');
+  assert.equal(formatChordQuality('^9'), 'maj9');
+  assert.equal(formatChordQuality('h'), 'm7b5');
+  assert.equal(formatChordQuality('h7'), 'm7b5');
+  assert.equal(formatChordQuality('o'), 'dim');
+  assert.equal(formatChordQuality('o7'), 'dim7');
+  assert.equal(formatChordQuality('+'), 'aug');
+  assert.equal(formatChordQuality('+7'), 'aug7');
+  assert.equal(formatChordQuality('2'), 'sus2');
+  assert.equal(formatChordQuality('-^7'), 'm(maj7)');
 });
 
 test('parseChordToken extracts root, quality, bass, and displayText', () => {
@@ -41,6 +51,60 @@ test('parseChordToken extracts root, quality, bass, and displayText', () => {
   assert.equal(ce.root, 'C');
   assert.equal(ce.bass, 'E');
   assert.equal(ce.displayText, 'C/E');
+
+  // Case-insensitive user input tests
+  const lowercaseAm = parseChordToken('am')!;
+  assert.ok(lowercaseAm);
+  assert.equal(lowercaseAm.root, 'A');
+  assert.equal(lowercaseAm.displayText, 'Am');
+
+  const lowercaseDm7 = parseChordToken('dm7')!;
+  assert.ok(lowercaseDm7);
+  assert.equal(lowercaseDm7.root, 'D');
+  assert.equal(lowercaseDm7.displayText, 'Dm7');
+
+  const lowercaseCe = parseChordToken('c/e')!;
+  assert.ok(lowercaseCe);
+  assert.equal(lowercaseCe.root, 'C');
+  assert.equal(lowercaseCe.bass, 'E');
+  assert.equal(lowercaseCe.displayText, 'C/E');
+
+  const lowercaseBb = parseChordToken('bb')!;
+  assert.ok(lowercaseBb);
+  assert.equal(lowercaseBb.root, 'Bb');
+  assert.equal(lowercaseBb.displayText, 'Bb');
+
+  const lowercaseBbm7 = parseChordToken('bbm7')!;
+  assert.ok(lowercaseBbm7);
+  assert.equal(lowercaseBbm7.root, 'Bb');
+  assert.equal(lowercaseBbm7.displayText, 'Bbm7');
+
+  const lowercaseFsharp = parseChordToken('f#m7/c#')!;
+  assert.ok(lowercaseFsharp);
+  assert.equal(lowercaseFsharp.root, 'F#');
+  assert.equal(lowercaseFsharp.bass, 'C#');
+  assert.equal(lowercaseFsharp.displayText, 'F#m7/C#');
+});
+
+test('Section labels correctly support customizable Intro, Verso 1, Coro Final, Puente, and custom sections', () => {
+  const sampleChordString = 'Y[*iT44<*69 tro Banda>C |G |Am |F ]Y{*v<*69 erso 1>C |G |Am |F }Y|*C<*69 oro Final>C |G |Am |F ]Y{*b<*69 Puente Instrumental>F |G |Am |C }Y{*a<*69 Estrofa>C |G |F |C ]';
+  const songData = {
+    title: 'Custom Section Test',
+    composer: 'Test Artist',
+    style: 'Pop',
+    key: 'C',
+    n: '0',
+    reserved: '',
+    tempoField: '115',
+    obfuscatedChords: sampleChordString,
+  };
+  const ast = parseIRealSong(songData);
+
+  assert.equal(ast.rows[0].sectionLabel, 'Intro Banda');
+  assert.equal(ast.rows[1].sectionLabel, 'Verso 1');
+  assert.equal(ast.rows[2].sectionLabel, 'Coro Final');
+  assert.equal(ast.rows[3].sectionLabel, 'Puente Instrumental');
+  assert.equal(ast.rows[4].sectionLabel, 'Estrofa');
 });
 
 test('parseIRealSong correctly parses song into sections, rows (4 bars each), and bars', () => {
@@ -173,18 +237,20 @@ test('parseIRealSong correctly extracts rhythmic pulses and sequential chord ele
   assert.equal(bar1.elements.length, 4);
   assert.ok(bar1.elements.every(e => e.type === 'pulse'));
 
-  // Coro (Row 5): 5 bars ending with N1 and N2
+  // Coro (Row 5 & 6): 5-bar phrase partitioned into strictly <= 4 bars
   const coroEndingRow = ast.rows[5];
-  assert.equal(coroEndingRow.bars.length, 5);
+  assert.equal(coroEndingRow.bars.length, 4);
   // Bar 3 has 1. ending F#m
   assert.equal(coroEndingRow.bars[3].ending, '1');
   assert.equal(coroEndingRow.bars[3].chords[0].displayText, 'F#m');
   assert.equal(coroEndingRow.bars[3].rightBarline, '}');
-  // Bar 4 has 2. ending A with Al Intro
-  assert.equal(coroEndingRow.bars[4].ending, '2');
-  assert.equal(coroEndingRow.bars[4].chords[0].displayText, 'A');
-  assert.equal(coroEndingRow.bars[4].rightBarline, ']');
-  assert.ok(coroEndingRow.bars[4].bottomAnnotations.includes('Al Intro'));
+
+  // Next row (Row 6) has 2. ending A with Al Intro
+  const coroVolta2Row = ast.rows[6];
+  assert.equal(coroVolta2Row.bars[0].ending, '2');
+  assert.equal(coroVolta2Row.bars[0].chords[0].displayText, 'A');
+  assert.equal(coroVolta2Row.bars[0].rightBarline, ']');
+  assert.ok(coroVolta2Row.bars[0].bottomAnnotations.includes('Al Intro'));
 });
 
 test('parseIRealSong correctly parses Venid, Glorificad A Dios with Segno, Coda, and endings', () => {
@@ -212,19 +278,26 @@ test('parseIRealSong correctly parses Venid, Glorificad A Dios with Segno, Coda,
   assert.equal(ast.rows[1].bars[2].chords[0].displayText, 'C/G');
   assert.equal(ast.rows[1].bars[3].chords[0].displayText, 'G');
 
-  // Row 6: D.S. al Coda with two-measure repeat (r)
-  const dsRow = ast.rows[6];
-  assert.ok(dsRow.bars.some(b => b.isDoubleRepeatMeasure));
-  assert.ok(dsRow.bars.some(b => b.bottomAnnotations.includes('D.S. al Coda')));
+  // D.S. al Coda row with two-measure repeat (r)
+  const dsRow = ast.rows.find(r => r.bars.some(b => b.isDoubleRepeatMeasure))!;
+  assert.ok(dsRow);
+  assert.equal(dsRow.bars[0].chords[0].displayText, 'G');
+  assert.ok(dsRow.bars[1].isDoubleRepeatMeasure);
+  assert.ok(dsRow.bars[1].bottomAnnotations.includes('D.S. al Coda'));
+  assert.equal(dsRow.bars[2].chords.length, 0); // Companion measure of the 2-measure repeat
+  assert.equal(dsRow.bars[2].rightBarline, ']');
 
-  // Row 7: Intro Coda (Q) with N1 and N2 endings
-  const codaRow = ast.rows[7];
-  assert.equal(codaRow.sectionSign, 'coda');
+  // Coda (Q) row with N1 and N2 endings
+  const codaRow = ast.rows.find(r => r.sectionSign === 'coda')!;
+  assert.ok(codaRow);
   assert.equal(codaRow.bars[0].chords[0].displayText, 'Em');
   assert.equal(codaRow.bars[2].ending, '1');
   assert.equal(codaRow.bars[2].chords[0].displayText, 'Bm');
-  assert.equal(codaRow.bars[4].ending, '2');
-  assert.equal(codaRow.bars[4].chords[0].displayText, 'C');
+
+  // 2. ending is present in row 9 within the 4-bar grid
+  const codaEnd2Bar = ast.rows[9].bars[0];
+  assert.equal(codaEnd2Bar.ending, '2');
+  assert.equal(codaEnd2Bar.chords[0].displayText, 'C');
 
   // Final Row: VERSO and CORO direction blocks with Fine at bottom
   const finalRow = ast.rows[ast.rows.length - 1];
@@ -292,4 +365,75 @@ test('parseIRealSong correctly extracts passing chords and pulse passing chords 
 
   assert.equal(row3Bar0.elements[3].type, 'pulse');
   assert.equal((row3Bar0.elements[3] as any).passingChord.displayText, 'Bm');
+});
+
+test('parseIRealSong correctly parses Hosanna into 10 rows matching authentic iReal Pro layout', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const htmlPath = path.resolve(process.cwd(), 'charts/Hosanna.html');
+  const html = fs.readFileSync(htmlPath, 'utf-8');
+
+  const [songData] = extractIRealSongs(html);
+  const ast = parseIRealSong(songData);
+
+  assert.equal(ast.title, 'Hosanna');
+  assert.equal(ast.composer, 'Hillsong United');
+  assert.equal(ast.rows.length, 10);
+  assert.equal(ast.totalBars, 40);
+
+  // Every row must have 4 bars
+  for (let i = 0; i < ast.rows.length; i++) {
+    assert.equal(ast.rows[i].bars.length, 4, `Row ${i} must have 4 bars`);
+  }
+
+  // Row 0: Intro [IN] tro with Am | C | G F | C G ]
+  const r0 = ast.rows[0];
+  assert.equal(r0.sectionLabel, 'Intro');
+  assert.equal(r0.sectionLetter, 'IN');
+  assert.equal(r0.sectionSuffix, 'tro');
+  assert.equal(r0.bars[0].leftBarline, '[');
+  assert.equal(r0.bars[3].rightBarline, ']');
+
+  // Row 1 & 2: Verso [V] erso with repeat |: ... :|
+  const r1 = ast.rows[1];
+  assert.equal(r1.sectionLabel, 'Verso');
+  assert.equal(r1.sectionLetter, 'V');
+  assert.equal(r1.sectionSuffix, 'erso');
+  assert.equal(r1.bars[0].leftBarline, '{');
+  assert.equal(ast.rows[2].bars[3].rightBarline, '}');
+
+  // Row 3 & 4: Coro [C] oro with Al Verso and double barline ||
+  const r3 = ast.rows[3];
+  assert.equal(r3.sectionLabel, 'Coro');
+  assert.equal(r3.sectionLetter, 'C');
+  assert.equal(r3.sectionSuffix, 'oro');
+  assert.equal(r3.bars[3].rightBarline, '||');
+  const r4 = ast.rows[4];
+  assert.equal(r4.bars[3].rightBarline, ']');
+  assert.ok(r4.bars[3].bottomAnnotations.includes('Al Verso'));
+
+  // Row 5 & 6: Bridge (Puente) [B] ridge (Puente) with repeat |: ... :|
+  const r5 = ast.rows[5];
+  assert.equal(r5.sectionLabel, 'Bridge (Puente)');
+  assert.equal(r5.sectionLetter, 'B');
+  assert.equal(r5.bars[0].leftBarline, '{');
+  assert.equal(r5.bars[3].rightBarline, '||');
+  assert.equal(ast.rows[6].bars[3].rightBarline, '}');
+
+  // Row 7: Instrumental [IN] strumental
+  const r7 = ast.rows[7];
+  assert.equal(r7.sectionLabel, 'Instrumental');
+  assert.equal(r7.sectionLetter, 'IN');
+  assert.equal(r7.sectionSuffix, 'strumental');
+  assert.equal(r7.bars[3].rightBarline, ']');
+
+  // Row 8 & 9: Coro Final [C] oro Final with repeat |: ... :| and Fine
+  const r8 = ast.rows[8];
+  assert.equal(r8.sectionLabel, 'Coro Final');
+  assert.equal(r8.sectionLetter, 'C');
+  assert.equal(r8.sectionSuffix, 'oro Final');
+  assert.equal(r8.bars[0].leftBarline, '{');
+  const r9 = ast.rows[9];
+  assert.equal(r9.bars[3].rightBarline, '}');
+  assert.ok(r9.bars[3].bottomAnnotations.includes('Fine'));
 });

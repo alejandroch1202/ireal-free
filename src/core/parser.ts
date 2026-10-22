@@ -1,31 +1,70 @@
 import type { BarAST, ChordToken, RowAST, SectionAST, SongAST, ParsedIRealUrlResult, MeasureElement } from '../types/ireal';
 import { deobfuscateChordString, normalizeComposerName } from './deobfuscator';
 
-const CHORD_REGEX = /^([A-G][#b]?)([^/]*)(?:\/([A-G][#b]?))?$/;
+const CHORD_REGEX = /^([a-gA-G][#b]?)([^/]*)(?:\/([a-gA-G][#b]?))?$/;
 
 /**
  * Maps standard iReal Pro chord representation to a clean user-facing format.
- * Specifically converts '-' to 'm' (e.g. E- -> Em, A-7 -> Am7, C-7b5 -> Cm7b5).
+ * Inspired by daumling/ireal-renderer & pianosnake/ireal-reader:
+ *  - '-' -> 'm' (e.g. E- -> Em, A-7 -> Am7)
+ *  - '^' -> 'maj7' (e.g. C^ -> Cmaj7, C^7 -> Cmaj7, C^9 -> Cmaj9)
+ *  - 'h' -> 'm7b5' (half-diminished, e.g. Bh -> Bm7b5, Bh7 -> Bm7b5)
+ *  - 'o' -> 'dim' (diminished, e.g. Fo -> Fdim, Fo7 -> Fdim7)
+ *  - '+' -> 'aug' (augmented, e.g. G+ -> Gaug, G+7 -> Gaug7)
+ *  - '2' -> 'sus2' (e.g. C2 -> Csus2)
+ *  - '-^7' -> 'm(maj7)'
  */
 export function formatChordQuality(quality: string): string {
   if (!quality) return '';
-  let formatted = quality.replace(/-/g, 'm');
+  let formatted = quality;
+
+  // Minor-major 7: -^7 or -^
+  if (formatted === '-^7' || formatted === '-^') return 'm(maj7)';
+
+  // Minor: convert - to m
+  formatted = formatted.replace(/-/g, 'm');
+
+  // Major: convert ^ to maj
   if (formatted === '^') formatted = 'maj7';
+  else if (formatted.startsWith('^7')) formatted = 'maj7' + formatted.slice(2);
   else if (formatted.startsWith('^')) formatted = 'maj' + formatted.slice(1);
+
+  // Half-diminished: h, h7, h9
+  if (formatted === 'h' || formatted === 'h7') formatted = 'm7b5';
+  else if (formatted.startsWith('h')) formatted = 'm7b5' + formatted.slice(1);
+
+  // Diminished: o, o7
+  if (formatted === 'o') formatted = 'dim';
+  else if (formatted === 'o7') formatted = 'dim7';
+  else if (formatted.startsWith('o')) formatted = 'dim' + formatted.slice(1);
+
+  // Augmented: +, +7, +9
+  if (formatted === '+') formatted = 'aug';
+  else if (formatted === '+7') formatted = 'aug7';
+  else if (formatted.startsWith('+')) formatted = 'aug' + formatted.slice(1);
+
+  // Standalone 2 is sus2
+  if (formatted === '2') formatted = 'sus2';
+
   return formatted;
 }
 
 /**
  * Parses an individual chord token into root, quality, optional bass, and formatted text.
+ * Resilient to case (e.g. "c", "am7", "c/e", "bb", "f#m") and iReal native symbols.
  */
 export function parseChordToken(token: string): ChordToken | null {
   const cleanToken = token.trim();
   const match = cleanToken.match(CHORD_REGEX);
   if (!match) return null;
 
-  const root = match[1];
+  const rawRoot = match[1];
+  const root = rawRoot.charAt(0).toUpperCase() + (rawRoot.length > 1 ? rawRoot.slice(1).toLowerCase() : '');
   const quality = match[2] || '';
-  const bass = match[3] || undefined;
+  const rawBass = match[3];
+  const bass = rawBass
+    ? rawBass.charAt(0).toUpperCase() + (rawBass.length > 1 ? rawBass.slice(1).toLowerCase() : '')
+    : undefined;
 
   const displayQuality = formatChordQuality(quality);
   const displayText = bass
@@ -58,33 +97,55 @@ function resolveSectionLabel(rawLetter: string, firstComment?: string): {
 
   if (firstComment) {
     const cleanComment = firstComment.toLowerCase().trim();
+
     if (cleanComment.startsWith('oro final')) {
       return { label: 'Coro Final', letter: 'C', suffix: firstComment, consumedComment: true };
     }
     if (cleanComment.startsWith('puente')) {
       return { label: firstComment, letter: 'B', suffix: firstComment, consumedComment: true };
     }
-    if (cleanComment.startsWith('intro solo')) {
-      return { label: firstComment, letter: 'IN', suffix: firstComment, consumedComment: true };
+    if (cleanComment.startsWith('intro solo') || cleanComment.startsWith('solo')) {
+      return { label: firstComment, letter: normLetter === 'I' ? 'IN' : normLetter, suffix: firstComment, consumedComment: true };
+    }
+    if (cleanComment.startsWith('pre-coro') || cleanComment.startsWith('precoro')) {
+      return { label: firstComment, letter: 'P', suffix: firstComment, consumedComment: true };
+    }
+    if (cleanComment.startsWith('outro')) {
+      return { label: firstComment, letter: 'O', suffix: firstComment, consumedComment: true };
     }
     if (normLetter === 'I' && (cleanComment.startsWith('tro') || cleanComment.startsWith('ntro'))) {
-      return { label: 'Intro', letter: 'IN', suffix: 'tro', consumedComment: true };
+      const rest = firstComment.replace(/^(tro|ntro)\s*/i, '').trim();
+      const label = rest ? `Intro ${rest}` : 'Intro';
+      return { label, letter: 'IN', suffix: firstComment, consumedComment: true };
     }
     if (normLetter === 'I' && (cleanComment.startsWith('strumental') || cleanComment.startsWith('nstrumental'))) {
-      return { label: 'Instrumental', letter: 'IN', suffix: 'strumental', consumedComment: true };
+      const rest = firstComment.replace(/^(strumental|nstrumental)\s*/i, '').trim();
+      const label = rest ? `Instrumental ${rest}` : 'Instrumental';
+      return { label, letter: 'IN', suffix: firstComment, consumedComment: true };
     }
     if (normLetter === 'V' && (cleanComment.startsWith('erso') || cleanComment.startsWith('erse'))) {
-      return { label: 'Verso', letter: 'V', suffix: 'erso', consumedComment: true };
+      const rest = firstComment.replace(/^(erso|erse)\s*/i, '').trim();
+      const label = rest ? `Verso ${rest}` : 'Verso';
+      return { label, letter: 'V', suffix: firstComment, consumedComment: true };
     }
     if (normLetter === 'C' && (cleanComment.startsWith('oro') || cleanComment.startsWith('horus'))) {
-      return { label: 'Coro', letter: 'C', suffix: 'oro', consumedComment: true };
+      const rest = firstComment.replace(/^(oro|horus)\s*/i, '').trim();
+      const label = rest ? `Coro ${rest}` : 'Coro';
+      return { label, letter: 'C', suffix: firstComment, consumedComment: true };
     }
     if (normLetter === 'B' && (cleanComment.startsWith('ridge') || cleanComment.startsWith('uente'))) {
-      return { label: 'Bridge (Puente)', letter: 'B', suffix: firstComment, consumedComment: true };
+      const label = cleanComment.startsWith('ridge') ? `B${firstComment}` : firstComment;
+      return { label, letter: 'B', suffix: firstComment, consumedComment: true };
     }
     if ((normLetter === 'D' || normLetter === 'F') && (cleanComment.startsWith('inal') || cleanComment.startsWith('final'))) {
-      const suffix = cleanComment.startsWith('inal') ? firstComment : cleanComment.startsWith('final') ? firstComment.slice(1) : firstComment;
-      return { label: 'Final', letter: normLetter === 'D' ? 'D' : 'F', suffix: suffix, consumedComment: true };
+      const rest = firstComment.replace(/^(final|inal)\s*/i, '').trim();
+      const label = rest ? `Final ${rest}` : 'Final';
+      return { label, letter: normLetter === 'D' ? 'D' : 'F', suffix: firstComment, consumedComment: true };
+    }
+
+    // Generic custom comment attached to rehearsal mark (e.g. *a with <*69 Estrofa>)
+    if (firstComment.length > 0 && !/^\d+x$/i.test(firstComment)) {
+      return { label: firstComment, letter: normLetter, suffix: firstComment, consumedComment: true };
     }
   }
 
@@ -92,13 +153,14 @@ function resolveSectionLabel(rawLetter: string, firstComment?: string): {
   if (normLetter === 'I') return { label: 'Intro', letter: 'IN', suffix: 'tro', consumedComment: false };
   if (normLetter === 'V') return { label: 'Verso', letter: 'V', suffix: 'erso', consumedComment: false };
   if (normLetter === 'C') return { label: 'Coro', letter: 'C', suffix: 'oro', consumedComment: false };
+  if (normLetter === 'B') return { label: 'Bridge', letter: 'B', suffix: 'ridge', consumedComment: false };
   if (normLetter === 'D') return { label: 'Final', letter: 'D', suffix: 'Final', consumedComment: false };
   return { label: normLetter, letter: normLetter, suffix: '', consumedComment: false };
 }
 
 interface RawBarItem {
   leftBarline: '|' | '{' | '[';
-  rightBarline: '|' | '}' | ']' | 'Z';
+  rightBarline: '|' | '}' | ']' | 'Z' | '||';
   raw: string;
   isRowBreakBefore?: boolean;
 }
@@ -158,6 +220,24 @@ function extractRawBars(cleaned: string): RawBarItem[] {
       flushBar();
       pendingRowBreak = true;
       pos++;
+      continue;
+    }
+
+    // Double barline '||' indicates an explicit double barline at the right of the measure
+    if (ch === '|' && pos + 1 < len && cleaned[pos + 1] === '|') {
+      if (currentBar) {
+        currentBar.rightBarline = '||';
+      } else {
+        currentBar = {
+          leftBarline: '|',
+          rightBarline: '||',
+          raw: '',
+          isRowBreakBefore: pendingRowBreak,
+        };
+        pendingRowBreak = false;
+      }
+      flushBar();
+      pos += 2;
       continue;
     }
 
@@ -302,11 +382,16 @@ function parseBarContent(rawBar: RawBarItem, barNumber: number): BarAST {
     }
   }
 
-  // 4. Time Signature (e.g. T44 -> 4/4, T34 -> 3/4, T68 -> 6/8)
-  const tsMatch = text.match(/T(\d{2})/);
+  // 4. Time Signature (e.g. T44 -> 4/4, T34 -> 3/4, T68 -> 6/8, T128 -> 12/8)
+  const tsMatch = text.match(/T(\d{2,3})/);
   if (tsMatch) {
-    timeSignature = `${tsMatch[1][0]}/${tsMatch[1][1]}`;
-    text = text.replace(/T\d{2}/, ' ');
+    const digits = tsMatch[1];
+    if (digits.length === 3) {
+      timeSignature = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    } else {
+      timeSignature = `${digits[0]}/${digits[1]}`;
+    }
+    text = text.replace(/T\d{2,3}/, ' ');
   }
 
   // 5. Alternate Endings / Voltas (e.g. N1, N2, N3)
@@ -552,7 +637,7 @@ export function parseIRealSong(songData: ParsedIRealUrlResult): SongAST {
       continue;
     }
 
-    if (p.length <= 5) {
+    if (p.length <= 4) {
       rowBarGroups.push(p);
     } else if (p.length === 8) {
       rowBarGroups.push(p.slice(0, 4));
@@ -560,19 +645,10 @@ export function parseIRealSong(songData: ParsedIRealUrlResult): SongAST {
     } else if (p.length === 6) {
       rowBarGroups.push(p.slice(0, 4));
       rowBarGroups.push(p.slice(4));
-    } else if (p.length === 9) {
-      const endIdx = p.findIndex((b) => Boolean(b.ending));
-      if (endIdx >= 4) {
-        rowBarGroups.push(p.slice(0, 4));
-        rowBarGroups.push(p.slice(4));
-      } else {
-        rowBarGroups.push(p.slice(0, 5));
-        rowBarGroups.push(p.slice(5));
-      }
     } else {
       let rem = [...p];
       while (rem.length > 0) {
-        if (rem.length <= 5) {
+        if (rem.length <= 4) {
           rowBarGroups.push(rem);
           break;
         }

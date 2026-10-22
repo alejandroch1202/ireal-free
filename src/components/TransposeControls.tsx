@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { STANDARD_KEYS, getKeyRoot } from '../core/transposer';
 
 interface TransposeControlsProps {
@@ -68,7 +69,10 @@ export const TransposeControls: React.FC<TransposeControlsProps> = ({
           onPress={onOpenImport}
           activeOpacity={0.8}
         >
-          <Text style={styles.importBtnText}>📂 Abrir Archivo</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Feather name="folder" size={14} color="#ffffff" />
+            <Text style={styles.importBtnText}>Abrir Archivo</Text>
+          </View>
         </TouchableOpacity>
       </View>
 

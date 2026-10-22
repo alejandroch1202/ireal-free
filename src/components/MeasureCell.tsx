@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import type { BarAST, ChordToken } from '../types/ireal';
 import type { ThemeColors } from '../theme/theme';
+import { SingleMeasureRepeat, DoubleMeasureRepeat, RepeatBarlineDots } from './RepeatSymbols';
 
 interface MeasureCellProps {
   bar: BarAST;
@@ -10,6 +11,7 @@ interface MeasureCellProps {
   theme: ThemeColors;
   fontScale?: number;
   cellWidth?: string;
+  onPressBar?: (bar: BarAST, chordIndex?: number) => void;
 }
 
 export const MeasureCell: React.FC<MeasureCellProps> = ({
@@ -19,18 +21,36 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
   theme,
   fontScale = 1.0,
   cellWidth,
+  onPressBar,
 }) => {
   const isRepeatStart = bar.leftBarline === '{';
   const isSectionStart = bar.leftBarline === '[';
   const isRepeatEnd = bar.rightBarline === '}';
   const isFinalBar = bar.rightBarline === 'Z';
   const isSectionEnd = bar.rightBarline === ']';
+  const isDoubleBarline = bar.rightBarline === '||';
 
   const chordCount = bar.chords.length;
-  const cellHeight = Math.max(54, Math.round(72 * fontScale));
+  const cellHeight = Math.max(36, Math.round(66 * fontScale));
 
   // Time signature parts (e.g. "4/4" -> ["4", "4"])
   const timeSigParts = bar.timeSignature ? bar.timeSignature.split('/') : null;
+
+  const leftPad =
+    timeSigParts && timeSigParts.length === 2
+      ? Math.round(18 * fontScale)
+      : isRepeatStart
+      ? Math.round(15 * fontScale)
+      : isSectionStart
+      ? Math.round(6 * fontScale)
+      : 0;
+
+  const rightPad =
+    isRepeatEnd
+      ? Math.round(15 * fontScale)
+      : isFinalBar || isSectionEnd || isDoubleBarline
+      ? Math.round(8 * fontScale)
+      : 0;
 
   // Prominent center direction (e.g. "CORO", "FINAL", "INTRO") if measure has no chords
   const centerAnnotation =
@@ -89,10 +109,7 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
         <View style={styles.leftRepeatContainer}>
           <View style={[styles.thickBarline, { backgroundColor: theme.thickBarline }]} />
           <View style={[styles.thinBarline, { backgroundColor: theme.barlineAccent }]} />
-          <View style={styles.repeatDotsCol}>
-            <View style={[styles.dot, { backgroundColor: theme.thickBarline }]} />
-            <View style={[styles.dot, { backgroundColor: theme.thickBarline }]} />
-          </View>
+          <RepeatBarlineDots color={theme.thickBarline} fontScale={fontScale} />
         </View>
       )}
 
@@ -106,7 +123,14 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
       )}
 
       {/* Main Measure Content Area */}
-      <View style={styles.contentArea}>
+      <TouchableOpacity
+        style={styles.contentArea}
+        onPress={onPressBar ? () => onPressBar(bar, 0) : undefined}
+        disabled={!onPressBar}
+        activeOpacity={0.85}
+        accessibilityRole={onPressBar ? 'button' : undefined}
+        accessibilityLabel={`Compás ${bar.barNumber}`}
+      >
         {/* Navigation sign (Segno / Coda) inside measure if not first in row */}
         {bar.navigationSign && !isFirstInRow && (
           <View style={styles.topLeftNavSign}>
@@ -162,8 +186,9 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
         <View
           style={[
             styles.chordsArea,
-            timeSigParts && timeSigParts.length === 2 && {
-              paddingLeft: Math.round(18 * fontScale),
+            {
+              paddingLeft: leftPad,
+              paddingRight: rightPad,
             },
           ]}
         >
@@ -186,51 +211,20 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
           ) : bar.isRepeatMeasure ? (
             /* Repeat Measure Symbol % */
             <View style={styles.repeatMeasureContainer}>
-              <Text
-                style={[
-                  styles.repeatMeasureSymbol,
-                  {
-                    color: theme.repeatSymbolColor,
-                    fontSize: Math.round(27 * fontScale),
-                  },
-                ]}
-              >
-                %
-              </Text>
+              <SingleMeasureRepeat
+                color={theme.repeatSymbolColor}
+                fontScale={fontScale}
+              />
             </View>
           ) : bar.isDoubleRepeatMeasure ? (
-            /* Two-Measure Repeat Symbol // with dots and centered navigation direction */
+            /* Two-Measure Repeat Symbol • // • with dots and centered navigation direction */
             <View style={styles.doubleRepeatContainer}>
-              <View style={styles.doubleRepeatSymbolRow}>
-                <View style={[styles.repeatDot, { backgroundColor: theme.repeatSymbolColor }]} />
-                <Text
-                  style={[
-                    styles.repeatMeasureSymbol,
-                    {
-                      color: theme.repeatSymbolColor,
-                      fontSize: Math.round(24 * fontScale),
-                      marginHorizontal: 3,
-                    },
-                  ]}
-                >
-                  //
-                </Text>
-                <View style={[styles.repeatDot, { backgroundColor: theme.repeatSymbolColor }]} />
-              </View>
-              {dsRepeatAnnotation && (
-                <Text
-                  style={[
-                    styles.dsAlCodaText,
-                    {
-                      color: theme.textPrimary,
-                      fontSize: Math.round(10.5 * fontScale),
-                    },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {dsRepeatAnnotation}
-                </Text>
-              )}
+              <DoubleMeasureRepeat
+                color={theme.repeatSymbolColor}
+                textColor={theme.textPrimary}
+                fontScale={fontScale}
+                annotation={dsRepeatAnnotation}
+              />
             </View>
           ) : bar.elements && bar.elements.length > 0 ? (
             /* Sequential Elements (chords & beat pulses placed in accurate rhythmic order) */
@@ -240,54 +234,67 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
                 bar.elements.length === 1 && styles.chordsRowSingle,
               ]}
             >
-              {bar.elements.map((elem, idx) => {
-                if (elem.type === 'pulse') {
+              {(() => {
+                let chordCounter = 0;
+                return bar.elements.map((elem, idx) => {
+                  if (elem.type === 'pulse') {
+                    const pulseChordIdx = elem.passingChord ? chordCounter++ : undefined;
+                    return (
+                      <View key={`pulse-${idx}`} style={styles.pulseItem}>
+                        {elem.passingChord ? (
+                          <View style={styles.passingChordOnPulse}>
+                            <RenderChord
+                              chord={elem.passingChord}
+                              count={bar.elements.length}
+                              theme={theme}
+                              fontScale={fontScale}
+                              isPassing={true}
+                              onPress={
+                                onPressBar && pulseChordIdx !== undefined
+                                  ? () => onPressBar(bar, pulseChordIdx)
+                                  : undefined
+                              }
+                            />
+                          </View>
+                        ) : null}
+                        <Text
+                          style={[
+                            styles.pulseSlashText,
+                            {
+                              color: theme.textSecondary,
+                              fontSize: Math.round(20 * fontScale),
+                              lineHeight: Math.round(22 * fontScale),
+                            },
+                          ]}
+                        >
+                          /
+                        </Text>
+                      </View>
+                    );
+                  }
+                  const curChordIdx = chordCounter++;
                   return (
-                    <View key={`pulse-${idx}`} style={styles.pulseItem}>
-                      {elem.passingChord ? (
-                        <View style={styles.passingChordOnPulse}>
-                          <RenderChord
-                            chord={elem.passingChord}
-                            count={bar.elements.length}
-                            theme={theme}
-                            fontScale={fontScale}
-                            isPassing={true}
-                          />
-                        </View>
-                      ) : null}
-                      <Text
-                        style={[
-                          styles.pulseSlashText,
-                          {
-                            color: theme.textSecondary,
-                            fontSize: Math.round(20 * fontScale),
-                            lineHeight: Math.round(22 * fontScale),
-                          },
-                        ]}
-                      >
-                        /
-                      </Text>
+                    <View
+                      key={`chord-${elem.chord.raw}-${idx}`}
+                      style={[
+                        elem.isPassing ? styles.standalonePassingChordItem : styles.elementChordItem,
+                      ]}
+                    >
+                      <RenderChord
+                        chord={elem.chord}
+                        count={bar.elements.length}
+                        theme={theme}
+                        fontScale={fontScale}
+                        isPassing={elem.isPassing}
+                        isSmall={elem.isSmall}
+                        onPress={
+                          onPressBar ? () => onPressBar(bar, curChordIdx) : undefined
+                        }
+                      />
                     </View>
                   );
-                }
-                return (
-                  <View
-                    key={`chord-${elem.chord.raw}-${idx}`}
-                    style={[
-                      elem.isPassing ? styles.standalonePassingChordItem : styles.elementChordItem,
-                    ]}
-                  >
-                    <RenderChord
-                      chord={elem.chord}
-                      count={bar.elements.length}
-                      theme={theme}
-                      fontScale={fontScale}
-                      isPassing={elem.isPassing}
-                      isSmall={elem.isSmall}
-                    />
-                  </View>
-                );
-              })}
+                });
+              })()}
             </View>
           ) : chordCount > 0 ? (
             /* Fallback chords row */
@@ -304,6 +311,7 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
                   count={chordCount}
                   theme={theme}
                   fontScale={fontScale}
+                  onPress={onPressBar ? () => onPressBar(bar, index) : undefined}
                 />
               ))}
             </View>
@@ -315,7 +323,13 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
 
         {/* Bottom Staff Annotations (e.g. "Al Intro", "Break", "Fine") */}
         {remainingBottomAnnotations.length > 0 ? (
-          <View style={styles.bottomAnnotationsRow}>
+          <View
+            style={[
+              styles.bottomAnnotationsRow,
+              isRepeatEnd && { right: Math.round(15 * fontScale) },
+              isDoubleBarline && { right: Math.round(7 * fontScale) },
+            ]}
+          >
             {remainingBottomAnnotations.map((ann, i) => {
               const isRightAligned = /^(Fine|Al\s|D\.C\.)/i.test(ann);
               return (
@@ -337,15 +351,12 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
             })}
           </View>
         ) : null}
-      </View>
+      </TouchableOpacity>
 
-      {/* Right Barline / Repeat End / Final Double Bar / Section Bracket */}
+      {/* Right Barline / Repeat End / Final Double Bar / Section Bracket / Double Barline || */}
       {isRepeatEnd ? (
         <View style={styles.rightRepeatContainer}>
-          <View style={styles.repeatDotsCol}>
-            <View style={[styles.dot, { backgroundColor: theme.thickBarline }]} />
-            <View style={[styles.dot, { backgroundColor: theme.thickBarline }]} />
-          </View>
+          <RepeatBarlineDots color={theme.thickBarline} fontScale={fontScale} />
           <View style={[styles.thinBarline, { backgroundColor: theme.barlineAccent }]} />
           <View style={[styles.thickBarline, { backgroundColor: theme.thickBarline }]} />
         </View>
@@ -353,6 +364,11 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
         <View style={styles.finalBarContainer}>
           <View style={[styles.thinBarline, { backgroundColor: theme.barlineAccent }]} />
           <View style={[styles.thickBarline, { backgroundColor: theme.thickBarline }]} />
+        </View>
+      ) : isDoubleBarline ? (
+        <View style={styles.doubleBarlineRightContainer}>
+          <View style={[styles.thinBarline, { backgroundColor: theme.barline }]} />
+          <View style={[styles.thinBarline, { backgroundColor: theme.barline, marginLeft: 2.5 }]} />
         </View>
       ) : (
         <View style={[styles.standardRightBorder, { backgroundColor: theme.barline }]} />
@@ -368,6 +384,7 @@ interface RenderChordProps {
   fontScale: number;
   isPassing?: boolean;
   isSmall?: boolean;
+  onPress?: () => void;
 }
 
 const RenderChord: React.FC<RenderChordProps> = ({
@@ -377,6 +394,7 @@ const RenderChord: React.FC<RenderChordProps> = ({
   fontScale,
   isPassing = false,
   isSmall = false,
+  onPress,
 }) => {
   const slashIndex = chord.displayText.indexOf('/');
   const chordPart = slashIndex >= 0 ? chord.displayText.slice(0, slashIndex) : chord.displayText;
@@ -405,13 +423,15 @@ const RenderChord: React.FC<RenderChordProps> = ({
   const qualitySize = Math.round(baseQuality * fontScale);
   const bassSize = Math.round(baseBass * fontScale);
 
+  let chordNode: React.ReactNode;
+
   if (bassPart) {
     const bassNote = bassPart.startsWith('/') ? bassPart.slice(1) : bassPart;
     const slashSize = Math.round(bassSize * 1.22);
     const bassOffsetTop = Math.round(rootSize * 0.36);
 
     // Diagonal Slash Chord: Root on upper-left, /Bass on lower-right (like the % symbol)
-    return (
+    chordNode = (
       <View style={[styles.slashChordDiagonal, isPassing && styles.passingSlashChord]}>
         <View style={styles.rootQualityRow}>
           <Text style={[styles.chordRoot, { fontSize: rootSize, color: theme.chordRoot }]}>
@@ -434,22 +454,36 @@ const RenderChord: React.FC<RenderChordProps> = ({
         </View>
       </View>
     );
+  } else {
+    chordNode = (
+      <View style={[styles.chordWrapper, isPassing && styles.passingChordWrapper]}>
+        <Text style={styles.chordText} numberOfLines={1}>
+          <Text style={[styles.chordRoot, { fontSize: rootSize, color: theme.chordRoot }]}>
+            {root}
+          </Text>
+          {quality ? (
+            <Text style={[styles.chordQuality, { fontSize: qualitySize, color: theme.chordRoot }]}>
+              {quality}
+            </Text>
+          ) : null}
+        </Text>
+      </View>
+    );
   }
 
-  return (
-    <View style={[styles.chordWrapper, isPassing && styles.passingChordWrapper]}>
-      <Text style={styles.chordText} numberOfLines={1}>
-        <Text style={[styles.chordRoot, { fontSize: rootSize, color: theme.chordRoot }]}>
-          {root}
-        </Text>
-        {quality ? (
-          <Text style={[styles.chordQuality, { fontSize: qualitySize, color: theme.chordRoot }]}>
-            {quality}
-          </Text>
-        ) : null}
-      </Text>
-    </View>
-  );
+  if (onPress) {
+    return (
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.7}
+        hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+      >
+        {chordNode}
+      </TouchableOpacity>
+    );
+  }
+
+  return <>{chordNode}</>;
 };
 
 const styles = StyleSheet.create({
@@ -719,6 +753,12 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     alignItems: 'center',
     gap: 2,
+  },
+  doubleBarlineRightContainer: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    gap: 2.5,
   },
   repeatDotsCol: {
     justifyContent: 'center',

@@ -4,9 +4,9 @@ import { formatChordQuality } from './parser';
 export const SHARPS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 export const FLATS  = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
 
-export const STANDARD_KEYS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
+export const STANDARD_KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'Bb', 'B'] as const;
 
-const PITCH_MAP: Record<string, number> = {
+export const PITCH_MAP: Record<string, number> = {
   'B#': 0, 'C': 0,
   'C#': 1, 'Db': 1,
   'D': 2,
@@ -108,15 +108,8 @@ export function calculateTargetKey(originalKey: string, semitones: number): stri
   if (pitch === undefined) return originalKey;
 
   const newPitch = ((pitch + semitones) % 12 + 12) % 12;
-
-  // Check whether target pitch class typically prefers sharps or flats
-  // Standard major key choices:
-  // 0: C, 1: Db, 2: D, 3: Eb, 4: E, 5: F, 6: F#/Gb, 7: G, 8: Ab, 9: A, 10: Bb, 11: B
-  const flatPitchClasses = new Set([1, 3, 5, 8, 10]); // Db, Eb, F, Ab, Bb
-  const useFlats = flatPitchClasses.has(newPitch);
-
-  const targetRoot = useFlats ? FLATS[newPitch] : SHARPS[newPitch];
-  return isMinor ? `${targetRoot}m` : targetRoot;
+  const targetRoot = STANDARD_KEYS[newPitch];
+  return isMinor ? (originalKey.includes('-') ? `${targetRoot}-` : `${targetRoot}m`) : targetRoot;
 }
 
 /**

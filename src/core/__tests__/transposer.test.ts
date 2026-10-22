@@ -76,7 +76,7 @@ test('transposeChord transposes root and bass in slash chords, formatting - to m
 test('calculateTargetKey and getSemitoneDelta work across all 12 keys', () => {
   assert.equal(calculateTargetKey('G', 2), 'A');
   assert.equal(calculateTargetKey('G', -2), 'F');
-  assert.equal(calculateTargetKey('G', 1), 'Ab');
+  assert.equal(calculateTargetKey('G', 1), 'G#');
   assert.equal(calculateTargetKey('C', 0), 'C');
   assert.equal(calculateTargetKey('C', 7), 'G');
 

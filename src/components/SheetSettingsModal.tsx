@@ -9,8 +9,10 @@ import {
   Platform,
   Alert,
   Linking,
+  ToastAndroid,
 } from 'react-native';
-import { STANDARD_KEYS, getKeyRoot } from '../core/transposer';
+import { Feather } from '@expo/vector-icons';
+import { STANDARD_KEYS, getKeyRoot, PITCH_MAP } from '../core/transposer';
 import { AboutModal } from './AboutModal';
 import type { SongAST } from '../types/ireal';
 import type { ThemeColors, ThemeMode } from '../theme/theme';
@@ -37,13 +39,15 @@ interface SheetSettingsModalProps {
   onOpenPlaylists: () => void;
   onOpenImport: () => void;
   onDeleteCurrentSong?: () => void;
+  onOpenEditSong?: () => void;
 }
 
 const FONT_PRESETS = [
-  { label: 'A⁻ Compacto', scale: 0.85, desc: '85%' },
+  { label: 'A⁻⁻ Mini', scale: 0.65, desc: '65%' },
+  { label: 'A⁻ Compacto', scale: 0.80, desc: '80%' },
   { label: 'A Normal', scale: 1.0, desc: '100%' },
-  { label: 'A⁺ Grande', scale: 1.18, desc: '118%' },
-  { label: 'A⁺⁺ Extra', scale: 1.35, desc: '135%' },
+  { label: 'A⁺ Grande', scale: 1.15, desc: '115%' },
+  { label: 'A⁺⁺ Extra', scale: 1.30, desc: '130%' },
 ];
 
 export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
@@ -68,6 +72,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
   onOpenPlaylists,
   onOpenImport,
   onDeleteCurrentSong,
+  onOpenEditSong,
 }) => {
   const isTransposed = song.transposeAmount !== 0;
   const currentRoot = getKeyRoot(song.currentKey);
@@ -125,7 +130,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
           <View style={[styles.header, { borderBottomColor: theme.rowBorder }]}>
             <View>
               <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>
-                Opciones & Configuración
+                Configuración
               </Text>
               <Text style={[styles.headerSubtitle, { color: descColor }]}>
                 {song.title} • {song.composer || 'iReal Pro'}
@@ -135,8 +140,10 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
               style={[styles.closeBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
               onPress={onClose}
               activeOpacity={0.7}
+              hitSlop={8}
+              accessibilityLabel="Cerrar"
             >
-              <Text style={[styles.closeBtnText, { color: theme.textPrimary }]}>✕</Text>
+              <Feather name="x" size={17} color={theme.textPrimary} />
             </TouchableOpacity>
           </View>
 
@@ -183,7 +190,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                 ) : (
                   <View style={styles.origKeyBadge}>
                     <Text style={[styles.origKeyBadgeText, { color: descColor }]}>
-                      Tono original ({originalKey})
+                      Original
                     </Text>
                   </View>
                 )}
@@ -200,8 +207,8 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
               {/* 12 Keys Grid */}
               <View style={styles.keysGrid}>
                 {STANDARD_KEYS.map((k) => {
-                  const isSelected = currentRoot === k;
-                  const isOrig = getKeyRoot(originalKey) === k;
+                  const isSelected = PITCH_MAP[currentRoot] !== undefined && PITCH_MAP[currentRoot] === PITCH_MAP[k];
+                  const isOrig = PITCH_MAP[getKeyRoot(originalKey)] !== undefined && PITCH_MAP[getKeyRoot(originalKey)] === PITCH_MAP[k];
 
                   return (
                     <TouchableOpacity
@@ -232,17 +239,77 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                   );
                 })}
               </View>
+
+              {/* Botón para editar tono original y metadatos */}
+              {onOpenEditSong && (
+                <TouchableOpacity
+                  style={[
+                    styles.editSongInfoBtn,
+                    { backgroundColor: theme.btnBg, borderColor: theme.btnBorder },
+                  ]}
+                  onPress={() => {
+                    onClose();
+                    onOpenEditSong();
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Feather name="edit-2" size={14} color={theme.textPrimary} />
+                  <Text style={[styles.editSongInfoText, { color: theme.textPrimary }]}>
+                    Editar Datos de la Canción
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Botón e indicación para editar acordes */}
+              <TouchableOpacity
+                style={[
+                  styles.editSongInfoBtn,
+                  { backgroundColor: theme.btnBg, borderColor: theme.btnBorder, marginTop: 8 },
+                ]}
+                onPress={() => {
+                  onClose();
+                  if (Platform.OS === 'android') {
+                    ToastAndroid.show('Toca cualquier compás en la partitura para editar sus acordes', ToastAndroid.LONG);
+                  } else {
+                    Alert.alert('Editar Acordes', 'Toca directamente cualquier compás o acorde en la partitura para modificarlo, sustituirlo o añadir nuevos acordes.');
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Feather name="music" size={14} color={theme.activeKeyBg || '#0284c7'} />
+                <Text style={[styles.editSongInfoText, { color: theme.textPrimary }]}>
+                  Editar Acordes (Toca un compás)
+                </Text>
+              </TouchableOpacity>
             </View>
 
             {/* 2. Tamaño de Letra y Partitura */}
             <View style={styles.sectionBlock}>
               <View style={styles.sectionTitleRow}>
                 <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
-                  Tamaño de Acordes & Escala
+                  Fuente
                 </Text>
-                <Text style={[styles.scaleValueText, { color: theme.activeKeyBg }]}>
-                  {Math.round(fontScale * 100)}%
-                </Text>
+                <View style={styles.scaleStepperContainer}>
+                  <TouchableOpacity
+                    style={[styles.scaleStepBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
+                    onPress={() => onSetFontScale(Math.max(0.55, Math.round((fontScale - 0.05) * 100) / 100))}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    <Feather name="minus" size={13} color={theme.btnText} />
+                  </TouchableOpacity>
+                  <Text style={[styles.scaleValueText, { color: theme.activeKeyBg }]}>
+                    {Math.round(fontScale * 100)}%
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.scaleStepBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
+                    onPress={() => onSetFontScale(Math.min(1.40, Math.round((fontScale + 0.05) * 100) / 100))}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    <Feather name="plus" size={13} color={theme.btnText} />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <View style={styles.presetsRow}>
@@ -307,14 +374,18 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                   }}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.themeOptionIcon}>☀️</Text>
+                  <Feather
+                    name="sun"
+                    size={16}
+                    color={themeMode === 'light' ? '#0284c7' : theme.textPrimary}
+                  />
                   <Text
                     style={[
                       styles.themeOptionText,
                       { color: themeMode === 'light' ? '#0284c7' : theme.textPrimary },
                     ]}
                   >
-                    Modo Claro (Papel Blanco)
+                    Modo Claro
                   </Text>
                 </TouchableOpacity>
 
@@ -329,14 +400,18 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                   }}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.themeOptionIcon}>🌙</Text>
+                  <Feather
+                    name="moon"
+                    size={16}
+                    color={themeMode === 'dark' ? '#0284c7' : theme.textPrimary}
+                  />
                   <Text
                     style={[
                       styles.themeOptionText,
                       { color: themeMode === 'dark' ? '#0284c7' : theme.textPrimary },
                     ]}
                   >
-                    Modo Oscuro (Pizarra iReal)
+                    Modo Oscuro
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -345,7 +420,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
             {/* 4. Ensayos en Vivo & Rendimiento */}
             <View style={styles.sectionBlock}>
               <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
-                Ensayos en Vivo & Rendimiento
+                Opciones
               </Text>
 
               {/* Keep Screen Awake Toggle */}
@@ -442,23 +517,23 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                 }}
                 activeOpacity={0.7}
               >
-                <Text style={styles.actionRowIcon}>⛶</Text>
+                <Feather name="maximize-2" size={17} color={theme.textPrimary} />
                 <View style={styles.actionRowTextCol}>
                   <Text style={[styles.actionRowTitle, { color: theme.textPrimary }]}>
                     Modo Pantalla Completa
                   </Text>
                   <Text style={[styles.actionRowDesc, { color: descColor }]}>
-                    Oculta barras para dar 100% de espacio a los acordes
+                    Oculta barras para optimizar el espacio
                   </Text>
                 </View>
-                <Text style={[styles.chevronIcon, { color: theme.textSecondary }]}>›</Text>
+                <Feather name="chevron-right" size={18} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
             {/* 5. Compartir, Biblioteca & Archivos */}
             <View style={styles.sectionBlock}>
               <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>
-                Compartir & Biblioteca
+                Biblioteca
               </Text>
               <View style={styles.actionButtonsCol}>
                 {/* Share Song */}
@@ -471,7 +546,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.actionRowIcon}>📤</Text>
+                    <Feather name="share-2" size={17} color={theme.textPrimary} />
                     <View style={styles.actionRowTextCol}>
                       <Text style={[styles.actionRowTitle, { color: theme.textPrimary }]}>
                         Compartir / Exportar .html
@@ -480,7 +555,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                         Exporta el archivo .html para iReal Pro, WhatsApp o Archivos
                       </Text>
                     </View>
-                    <Text style={[styles.chevronIcon, { color: theme.textSecondary }]}>›</Text>
+                    <Feather name="chevron-right" size={18} color={theme.textSecondary} />
                   </TouchableOpacity>
                 )}
 
@@ -493,7 +568,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                   }}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.actionRowIcon}>📋</Text>
+                  <Feather name="list" size={17} color={theme.textPrimary} />
                   <View style={styles.actionRowTextCol}>
                     <Text style={[styles.actionRowTitle, { color: theme.textPrimary }]}>
                       Repertorio & Listas de Canciones
@@ -502,7 +577,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                       Gestiona tus canciones y sets en vivo
                     </Text>
                   </View>
-                  <Text style={[styles.chevronIcon, { color: theme.textSecondary }]}>›</Text>
+                  <Feather name="chevron-right" size={18} color={theme.textSecondary} />
                 </TouchableOpacity>
 
                 {/* Import Song */}
@@ -514,7 +589,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                   }}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.actionRowIcon}>📂</Text>
+                  <Feather name="folder" size={17} color={theme.textPrimary} />
                   <View style={styles.actionRowTextCol}>
                     <Text style={[styles.actionRowTitle, { color: theme.textPrimary }]}>
                       Importar Canción / Archivo .html
@@ -523,7 +598,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                       Abre archivos iReal Pro o pega enlaces irealb://
                     </Text>
                   </View>
-                  <Text style={[styles.chevronIcon, { color: theme.textSecondary }]}>›</Text>
+                  <Feather name="chevron-right" size={18} color={theme.textSecondary} />
                 </TouchableOpacity>
 
                 {/* Delete Current Song */}
@@ -542,7 +617,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                     onPress={handleConfirmDelete}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.actionRowIcon}>🗑️</Text>
+                    <Feather name="trash-2" size={17} color="#ef4444" />
                     <View style={styles.actionRowTextCol}>
                       <Text style={[styles.actionRowTitle, { color: '#ef4444' }]}>
                         Eliminar Canción del Repertorio
@@ -556,7 +631,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                         Elimina permanentemente "{song.title}" de tu memoria
                       </Text>
                     </View>
-                    <Text style={[styles.chevronIcon, { color: '#ef4444' }]}>✕</Text>
+                    <Feather name="x" size={17} color="#ef4444" />
                   </TouchableOpacity>
                 )}
               </View>
@@ -575,7 +650,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                 onPress={() => setShowAboutModal(true)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.actionRowIcon}>ℹ️</Text>
+                <Feather name="info" size={17} color={theme.textPrimary} />
                 <View style={styles.actionRowTextCol}>
                   <Text style={[styles.actionRowTitle, { color: theme.textPrimary }]}>
                     Acerca de iReal Free
@@ -584,7 +659,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                     Versión 1.0.0 • Desarrollado por alejandroch.com
                   </Text>
                 </View>
-                <Text style={[styles.chevronIcon, { color: theme.textSecondary }]}>›</Text>
+                <Feather name="chevron-right" size={18} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -594,12 +669,14 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                 iReal Free v1.0.0
               </Text>
               <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center' }}
                 onPress={() => Linking.openURL('https://alejandroch.com').catch(() => {})}
                 activeOpacity={0.7}
               >
                 <Text style={styles.modalFooterLink}>
-                  Desarrollado por alejandroch.com ↗
+                  Desarrollado por alejandroch.com
                 </Text>
+                <Feather name="external-link" size={12} color="#0284c7" style={{ marginLeft: 4 }} />
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -649,7 +726,7 @@ const styles = StyleSheet.create({
   closeBtn: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: 8,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -760,9 +837,47 @@ const styles = StyleSheet.create({
     borderRadius: 1.5,
     backgroundColor: '#e5a93b',
   },
+  editSongInfoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 10,
+    gap: 8,
+  },
+  editSongInfoIcon: {
+    fontSize: 14,
+  },
+  editSongInfoText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  scaleStepperContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  scaleStepBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scaleStepBtnText: {
+    fontSize: 15,
+    fontWeight: '800',
+    lineHeight: 18,
+  },
   scaleValueText: {
     fontSize: 13,
     fontWeight: '800',
+    minWidth: 40,
+    textAlign: 'center',
   },
   presetsRow: {
     flexDirection: 'row',

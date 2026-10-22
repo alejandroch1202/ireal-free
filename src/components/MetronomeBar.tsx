@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import type { ThemeColors } from '../theme/theme';
 
 interface MetronomeBarProps {
@@ -47,7 +48,7 @@ export const MetronomeBar: React.FC<MetronomeBarProps> = ({
           activeOpacity={0.7}
           hitSlop={{ top: 8, bottom: 8, left: 6, right: 2 }}
         >
-          <Text style={[styles.bpmStepText, { color: theme.btnText }]}>-</Text>
+          <Feather name="minus" size={13} color={theme.btnText} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -67,7 +68,7 @@ export const MetronomeBar: React.FC<MetronomeBarProps> = ({
           activeOpacity={0.7}
           hitSlop={{ top: 8, bottom: 8, left: 2, right: 6 }}
         >
-          <Text style={[styles.bpmStepText, { color: theme.btnText }]}>+</Text>
+          <Feather name="plus" size={13} color={theme.btnText} />
         </TouchableOpacity>
 
         {/* Tap Tempo Button */}
@@ -92,7 +93,12 @@ export const MetronomeBar: React.FC<MetronomeBarProps> = ({
           onPress={onTogglePlay}
           activeOpacity={0.8}
         >
-          <Text style={styles.playIcon}>{isPlaying ? '⏸' : '▶'}</Text>
+          <Feather
+            name={isPlaying ? 'pause' : 'play'}
+            size={17}
+            color="#ffffff"
+            style={!isPlaying ? { marginLeft: 2 } : undefined}
+          />
         </TouchableOpacity>
 
         {/* Flashing Beat Dots */}
@@ -153,9 +159,9 @@ const styles = StyleSheet.create({
     minWidth: 90,
   },
   bpmStepBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 28,
+    height: 28,
+    borderRadius: 8,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -235,9 +241,12 @@ const styles = StyleSheet.create({
   },
   infoPill: {
     borderWidth: 1,
-    borderRadius: 4,
-    paddingHorizontal: 5,
+    borderRadius: 6,
+    paddingHorizontal: 7,
     paddingVertical: 3,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   infoPillText: {
     fontSize: 10,

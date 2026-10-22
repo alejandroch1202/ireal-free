@@ -6,7 +6,7 @@
     "scheme": "irealb",
     "orientation": "default",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -108,7 +108,7 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#151e25"
+          "backgroundColor": "#FFFFFF"
         }
       ],
       "expo-sharing"
