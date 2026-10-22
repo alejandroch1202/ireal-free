@@ -12,6 +12,7 @@ interface LeadSheetGridProps {
   fontScale?: number;
   onEditBar?: (bar: BarAST, chordIndex?: number) => void;
   onEditSection?: (rowIndex: number, currentLabel: string) => void;
+  onLoadHosannaSample?: () => void;
 }
 
 export const LeadSheetGrid: React.FC<LeadSheetGridProps> = ({
@@ -20,6 +21,7 @@ export const LeadSheetGrid: React.FC<LeadSheetGridProps> = ({
   fontScale = 1.0,
   onEditBar,
   onEditSection,
+  onLoadHosannaSample,
 }) => {
   const rowMarginBottom = Math.max(5, Math.round(15 * fontScale));
 
@@ -62,6 +64,29 @@ export const LeadSheetGrid: React.FC<LeadSheetGridProps> = ({
             <Text style={[styles.emptySheetSub, { color: theme.textSecondary }]}>
               Toca "Importar" en la parte superior para cargar canciones o abrir archivos .html de iReal Pro.
             </Text>
+            {Boolean(onLoadHosannaSample) && (
+              <TouchableOpacity
+                style={[
+                  styles.emptySampleBtn,
+                  {
+                    backgroundColor: theme.btnBg,
+                    borderColor: theme.activeKeyBg || '#0284c7',
+                  },
+                ]}
+                onPress={onLoadHosannaSample}
+                activeOpacity={0.8}
+              >
+                <Feather
+                  name="music"
+                  size={15}
+                  color={theme.activeKeyBg || '#0284c7'}
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={[styles.emptySampleBtnText, { color: theme.activeKeyBg || '#0284c7' }]}>
+                  Cargar canción de muestra
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
           (() => {
@@ -439,5 +464,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 19,
     maxWidth: 320,
+  },
+  emptySampleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 20,
+  },
+  emptySampleBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

@@ -14,13 +14,15 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import * as SplashScreen from 'expo-splash-screen';
 import { Feather } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
 import { extractIRealSongs } from './src/core/deobfuscator';
 import { parseIRealSong } from './src/core/parser';
 import { transposeSong, transposeChord } from './src/core/transposer';
-import { exportAndShareSongHtml } from './src/utils/fileExporter';
+import { exportAndShareSongHtml, exportAndShareLibraryHtml } from './src/utils/fileExporter';
 import { serializeSongToIRealHtml } from './src/core/serializer';
+import { HOSANNA_SAMPLE_HTML } from './src/samples/defaultSong';
 import { TopBar } from './src/components/TopBar';
 import { LeadSheetGrid } from './src/components/LeadSheetGrid';
 import { MetronomeBar } from './src/components/MetronomeBar';
@@ -53,10 +55,19 @@ const EMPTY_SONG: SongAST = {
   rawDeobfuscated: '',
 };
 
+// Keep native splash screen visible until storage and theme are fully loaded
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
 export default function App() {
   // Theme state (Light mode default, persisted)
   const [themeMode, setThemeMode] = useState<ThemeMode>('light');
   const theme = themeMode === 'dark' ? darkTheme : lightTheme;
+
+  // Guards whether the initial storage load is complete.
+  // Any incoming deep-link / file URI received before the app is ready is
+  // queued here and processed immediately after initialization finishes.
+  const [isAppReady, setIsAppReady] = useState(false);
+  const pendingUriRef = useRef<string | null>(null);
 
   // Font scale modifier (persisted)
   const [fontScale, setFontScale] = useState<number>(1.0);
@@ -156,7 +167,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    refreshStorageData();
+    refreshStorageData().finally(() => {
+      setIsAppReady(true);
+    });
   }, [refreshStorageData]);
 
   // Manage keep-awake lifecycle
@@ -292,7 +305,7 @@ export default function App() {
   };
 
   // Handle opening song from external .html file or irealb:// link (Android Intent / Deep Link)
-  const handleOpenIncomingUri = useCallback(
+  const processIncomingUri = useCallback(
     async (uri: string) => {
       try {
         if (!uri) return;
@@ -352,6 +365,41 @@ export default function App() {
     },
     [handleSongLoaded, handleMultipleSongsLoaded]
   );
+
+  // Queue incoming URI if the app isn't ready yet; process it once ready.
+  const handleOpenIncomingUri = useCallback(
+    (uri: string) => {
+      if (!uri) return;
+      // Silently drop Expo dev server / localhost links
+      if (
+        uri.startsWith('exp://') ||
+        uri.startsWith('exps://') ||
+        uri.includes('localhost') ||
+        uri.includes('127.0.0.1')
+      ) {
+        return;
+      }
+      if (!isAppReady) {
+        // Store for deferred processing after init completes
+        pendingUriRef.current = uri;
+      } else {
+        processIncomingUri(uri);
+      }
+    },
+    [isAppReady, processIncomingUri]
+  );
+
+  // Once the app finishes initializing, dismiss splash screen and drain any pending URI that arrived early
+  useEffect(() => {
+    if (isAppReady) {
+      SplashScreen.hideAsync().catch(() => {});
+      if (pendingUriRef.current) {
+        const uri = pendingUriRef.current;
+        pendingUriRef.current = null;
+        processIncomingUri(uri);
+      }
+    }
+  }, [isAppReady, processIncomingUri]);
 
   // Listen for incoming files and links from Android Intents and deep links
   useEffect(() => {
@@ -527,14 +575,30 @@ export default function App() {
     tempo?: number;
     setNewAsOriginal?: boolean;
   }) => {
-    const activeSaved = librarySongs.find(
-      (s) => s.title.toLowerCase().trim() === baseSong.title.toLowerCase().trim()
-    );
+    // 1. Locate the active song in storage (by active ID or title match)
+    const activeId = await PlaylistStorage.getActiveSongId();
+    let activeSaved = librarySongs.find((s) => s.id === activeId);
+    if (!activeSaved) {
+      activeSaved = librarySongs.find(
+        (s) => s.title.toLowerCase().trim() === baseSong.title.toLowerCase().trim()
+      );
+    }
+    if (!activeSaved) {
+      const stored = await PlaylistStorage.getSongs();
+      activeSaved =
+        stored.find((s) => s.id === activeId) ||
+        stored.find(
+          (s) => s.title.toLowerCase().trim() === baseSong.title.toLowerCase().trim()
+        );
+    }
     if (!activeSaved) return;
+
+    let newBase: SongAST;
+    let newCurrent: SongAST;
 
     if (updated.setNewAsOriginal) {
       // The current transposed key becomes the new permanent original key!
-      const newBase: SongAST = {
+      newBase = {
         ...currentSong,
         title: updated.title,
         composer: updated.composer,
@@ -544,25 +608,12 @@ export default function App() {
         currentKey: currentSong.currentKey,
         transposeAmount: 0,
       };
-      setBaseSong(newBase);
-      setCurrentSong(newBase);
-
+      newCurrent = newBase;
       await PlaylistStorage.saveSongTransposition(activeSaved.id, 0);
-      await PlaylistStorage.updateSong(activeSaved.id, {
-        title: updated.title,
-        composer: updated.composer,
-        key: currentSong.currentKey,
-        style: updated.style,
-        tempo: updated.tempo,
-      });
     } else {
-      // Key or metadata changed
       const keyChanged = updated.key !== baseSong.originalKey;
-      let newBase: SongAST;
-      let newCurrent: SongAST;
-
       if (keyChanged) {
-        // Transpose the song to the newly selected original key
+        // Transpose all chords and notes to the newly chosen original key
         const transposed = transposeSong(baseSong, updated.key);
         newBase = {
           ...transposed,
@@ -592,22 +643,61 @@ export default function App() {
           tempo: updated.tempo,
         };
       }
-
-      setBaseSong(newBase);
-      setCurrentSong(newCurrent);
-
-      await PlaylistStorage.updateSong(activeSaved.id, {
-        title: updated.title,
-        composer: updated.composer,
-        key: updated.key,
-        style: updated.style,
-        tempo: updated.tempo,
-      });
     }
 
+    // 2. Immediately update in-memory state
+    setBaseSong(newBase);
+    setCurrentSong(newCurrent);
+
+    // 3. CRITICAL: Serialize the updated song AST to iReal Pro HTML and persist rawInput!
+    const updatedRawHtml = serializeSongToIRealHtml(newBase);
+
+    await PlaylistStorage.updateSong(activeSaved.id, {
+      title: updated.title,
+      composer: updated.composer,
+      key: newBase.originalKey,
+      style: updated.style,
+      tempo: updated.tempo,
+      rawInput: updatedRawHtml,
+    });
     await PlaylistStorage.setActiveSongId(activeSaved.id);
-    await refreshStorageData();
-    Alert.alert('Canción actualizada', `Los datos de "${updated.title}" se han guardado con éxito.`);
+
+    // 4. Update library state without overwriting baseSong/currentSong
+    const updatedLibrary = await PlaylistStorage.getSongs();
+    setLibrarySongs(updatedLibrary);
+
+    if (Platform.OS === 'android') {
+      ToastAndroid.show('Canción actualizada con éxito', ToastAndroid.SHORT);
+    } else {
+      Alert.alert('Canción actualizada', `Los datos de "${updated.title}" se han guardado con éxito.`);
+    }
+  };
+
+  // Load sample song (Hosanna) only when library is empty
+  const handleLoadHosannaSample = async () => {
+    try {
+      const extracted = extractIRealSongs(HOSANNA_SAMPLE_HTML);
+      if (extracted.length > 0) {
+        const parsed = parseIRealSong(extracted[0]);
+        await handleSongLoaded(parsed, HOSANNA_SAMPLE_HTML);
+      }
+    } catch (err) {
+      console.warn('Error al cargar muestra de Hosanna:', err);
+    }
+  };
+
+  // Export and share entire repertoire as a single authentic iReal Pro playlist .html file
+  const handleExportAllSongs = async () => {
+    if (librarySongs.length === 0) {
+      Alert.alert('Repertorio vacío', 'No hay canciones en tu biblioteca para exportar.');
+      return;
+    }
+    try {
+      await exportAndShareLibraryHtml(librarySongs, 'Repertorio iReal Free');
+    } catch (err) {
+      console.warn('Error al exportar repertorio:', err);
+      Alert.alert('Error', 'No se pudo exportar el repertorio.');
+    }
   };
 
   // Open chord editor modal for a specific bar and chord (disabled in full-screen)
@@ -930,6 +1020,7 @@ export default function App() {
               onOpenImport={() => setImportModalVisible(true)}
               onOpenSettings={() => setSettingsModalVisible(true)}
               onReturnToSheet={() => setCurrentScreen('sheet')}
+              onLoadHosannaSample={librarySongs.length === 0 ? handleLoadHosannaSample : undefined}
             />
           ) : (
             /* Lead Sheet Screen */
@@ -960,6 +1051,7 @@ export default function App() {
                 fontScale={fontScale}
                 onEditBar={isFullScreen ? undefined : handleOpenEditChord}
                 onEditSection={isFullScreen ? undefined : handleOpenEditSection}
+                onLoadHosannaSample={librarySongs.length === 0 ? handleLoadHosannaSample : undefined}
               />
 
               {/* Bottom Metronome Player Bar (Hidden in Full-Screen Mode) */}
@@ -1097,6 +1189,7 @@ export default function App() {
               currentSong.title !== 'Sin Canciones' ? handleDeleteCurrentSong : undefined
             }
             onOpenEditSong={() => setEditSongModalVisible(true)}
+            onExportAllSongs={librarySongs.length > 0 ? handleExportAllSongs : undefined}
           />
 
           {/* Import Modal */}
@@ -1118,6 +1211,7 @@ export default function App() {
             songs={librarySongs}
             onRefreshData={refreshStorageData}
             onDeleteSong={handleDeleteSong}
+            onLoadHosannaSample={librarySongs.length === 0 ? handleLoadHosannaSample : undefined}
           />
 
           {/* Edit Song Information & Original Key Modal */}

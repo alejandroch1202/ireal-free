@@ -31,26 +31,33 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
   const isDoubleBarline = bar.rightBarline === '||';
 
   const chordCount = bar.chords.length;
+  const isSingleChord =
+    chordCount === 1 ||
+    (bar.elements && bar.elements.length === 1 && bar.elements[0].type === 'chord');
   const cellHeight = Math.max(36, Math.round(66 * fontScale));
 
   // Time signature parts (e.g. "4/4" -> ["4", "4"])
   const timeSigParts = bar.timeSignature ? bar.timeSignature.split('/') : null;
 
-  const leftPad =
-    timeSigParts && timeSigParts.length === 2
-      ? Math.round(18 * fontScale)
-      : isRepeatStart
-      ? Math.round(15 * fontScale)
-      : isSectionStart
-      ? Math.round(6 * fontScale)
-      : 0;
+  // Single chords stay perfectly centered at the exact midpoint of the measure cell.
+  // Multiple chords keep lateral padding so edge chords never touch barlines.
+  const leftPad = isSingleChord
+    ? 0
+    : timeSigParts && timeSigParts.length === 2
+    ? Math.round(18 * fontScale)
+    : isRepeatStart
+    ? Math.round(15 * fontScale)
+    : isSectionStart
+    ? Math.round(6 * fontScale)
+    : 0;
 
-  const rightPad =
-    isRepeatEnd
-      ? Math.round(15 * fontScale)
-      : isFinalBar || isSectionEnd || isDoubleBarline
-      ? Math.round(8 * fontScale)
-      : 0;
+  const rightPad = isSingleChord
+    ? 0
+    : isRepeatEnd
+    ? Math.round(15 * fontScale)
+    : isFinalBar || isSectionEnd || isDoubleBarline
+    ? Math.round(8 * fontScale)
+    : 0;
 
   // Prominent center direction (e.g. "CORO", "FINAL", "INTRO") if measure has no chords
   const centerAnnotation =
@@ -723,8 +730,12 @@ const styles = StyleSheet.create({
     paddingRight: 1,
   },
   standardRightBorder: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
     width: 1.5,
-    alignSelf: 'stretch',
+    zIndex: 2,
   },
   thickBarline: {
     width: 3.5,
@@ -735,28 +746,44 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   leftRepeatContainer: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 4,
     flexDirection: 'row',
-    alignSelf: 'stretch',
     alignItems: 'center',
     gap: 1.5,
     paddingRight: 1,
   },
   rightRepeatContainer: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 4,
     flexDirection: 'row',
-    alignSelf: 'stretch',
     alignItems: 'center',
     gap: 1.5,
     paddingLeft: 1,
   },
   finalBarContainer: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 4,
     flexDirection: 'row',
-    alignSelf: 'stretch',
     alignItems: 'center',
     gap: 2,
   },
   doubleBarlineRightContainer: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 4,
     flexDirection: 'row',
-    alignSelf: 'stretch',
     alignItems: 'center',
     gap: 2.5,
   },
@@ -771,9 +798,12 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   sectionBracketLeft: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 4,
     flexDirection: 'row',
-    alignSelf: 'stretch',
-    position: 'relative',
     width: 5,
   },
   bracketHookTop: {

@@ -77,3 +77,61 @@ test('Editing a chord in Hosanna updates the serialized song and persists upon r
   assert.equal(reloadedAst.rows.length, 10);
   assert.equal(reloadedAst.totalBars, 40);
 });
+
+test('Updating song metadata (title, composer, original key) persists upon serialization and reparse', () => {
+  const htmlPath = path.resolve(process.cwd(), 'charts/Hosanna.html');
+  const html = fs.readFileSync(htmlPath, 'utf-8');
+  const [songData] = extractIRealSongs(html);
+  const ast = parseIRealSong(songData);
+
+  // Update metadata
+  const updatedAst = {
+    ...ast,
+    title: 'Hosanna (En Vivo)',
+    composer: 'Hillsong Worship',
+    originalKey: 'D',
+    currentKey: 'D',
+    style: 'Worship',
+    tempo: 72,
+  };
+
+  const serializedHtml = serializeSongToIRealHtml(updatedAst);
+  const [reparsedSongData] = extractIRealSongs(serializedHtml);
+  const reparsed = parseIRealSong(reparsedSongData);
+
+  assert.equal(reparsed.title, 'Hosanna (En Vivo)');
+  assert.equal(reparsed.composer, 'Hillsong Worship');
+  assert.equal(reparsed.originalKey, 'D');
+  assert.equal(reparsed.style, 'Worship');
+  assert.equal(reparsed.tempo, 72);
+});
+
+test('Multiple songs in a playlist HTML export can be extracted and reloaded accurately', () => {
+  const songs = [
+    {
+      title: 'Cancion Uno',
+      composer: 'Compositor 1',
+      rawInput: '<a href="irealb://Cancion%20Uno=Compositor%201==Pop=C=0=Y%5B*iT44%20C%20%7CG%20%5D=Pop=120=3">Cancion Uno</a>',
+    },
+    {
+      title: 'Cancion Dos',
+      composer: 'Compositor 2',
+      rawInput: '<a href="irealb://Cancion%20Dos=Compositor%202==Ballad=G=0=Y%5B*vT44%20G%20%7CD%20%5D=Ballad=80=3">Cancion Dos</a>',
+    },
+  ];
+
+  const songPayloads = songs.map((s) => {
+    const match = s.rawInput.match(/irealb:\/\/([^"'>]+)/);
+    return match ? match[1] : '';
+  });
+
+  const playlistUrl = `irealb://${songPayloads.join('===')}===Mi%20Repertorio`;
+  const fullHtml = `<html><body><h3><a href="${playlistUrl}">Mi Repertorio</a></h3></body></html>`;
+
+  const extracted = extractIRealSongs(fullHtml);
+  assert.equal(extracted.length, 2);
+  assert.equal(extracted[0].title, 'Cancion Uno');
+  assert.equal(extracted[0].key, 'C');
+  assert.equal(extracted[1].title, 'Cancion Dos');
+  assert.equal(extracted[1].key, 'G');
+});

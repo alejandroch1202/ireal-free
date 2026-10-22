@@ -40,6 +40,7 @@ interface SheetSettingsModalProps {
   onOpenImport: () => void;
   onDeleteCurrentSong?: () => void;
   onOpenEditSong?: () => void;
+  onExportAllSongs?: () => void;
 }
 
 const FONT_PRESETS = [
@@ -73,6 +74,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
   onOpenImport,
   onDeleteCurrentSong,
   onOpenEditSong,
+  onExportAllSongs,
 }) => {
   const isTransposed = song.transposeAmount !== 0;
   const currentRoot = getKeyRoot(song.currentKey);
@@ -553,6 +555,29 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                       </Text>
                       <Text style={[styles.actionRowDesc, { color: descColor }]}>
                         Exporta el archivo .html para iReal Pro, WhatsApp o Archivos
+                      </Text>
+                    </View>
+                    <Feather name="chevron-right" size={18} color={theme.textSecondary} />
+                  </TouchableOpacity>
+                )}
+
+                {/* Export All Songs (Mass Backup) */}
+                {onExportAllSongs && (
+                  <TouchableOpacity
+                    style={[styles.actionRowBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
+                    onPress={() => {
+                      onClose();
+                      onExportAllSongs();
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="download" size={17} color={theme.textPrimary} />
+                    <View style={styles.actionRowTextCol}>
+                      <Text style={[styles.actionRowTitle, { color: theme.textPrimary }]}>
+                        Exportar Todo el Repertorio
+                      </Text>
+                      <Text style={[styles.actionRowDesc, { color: descColor }]}>
+                        Crea un respaldo de todas tus canciones en un solo archivo .html
                       </Text>
                     </View>
                     <Feather name="chevron-right" size={18} color={theme.textSecondary} />

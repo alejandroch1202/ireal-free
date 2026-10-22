@@ -34,6 +34,7 @@ interface PlaylistsModalProps {
   onOpenImport?: () => void;
   onOpenSettings?: () => void;
   onReturnToSheet?: () => void;
+  onLoadHosannaSample?: () => void;
 }
 
 export const PlaylistsModal: React.FC<PlaylistsModalProps> = ({
@@ -50,6 +51,7 @@ export const PlaylistsModal: React.FC<PlaylistsModalProps> = ({
   onOpenImport,
   onOpenSettings,
   onReturnToSheet,
+  onLoadHosannaSample,
 }) => {
   const [activeTab, setActiveTab] = useState<'playlists' | 'songs'>('songs');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
@@ -612,6 +614,34 @@ export const PlaylistsModal: React.FC<PlaylistsModalProps> = ({
                             <Feather name="plus" size={15} color={theme.activeKeyText || '#ffffff'} style={{ marginRight: 6 }} />
                             <Text style={[styles.emptyImportBtnText, { color: theme.activeKeyText || '#ffffff' }]}>
                               Importar Canciones
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      )}
+
+                      {!searchQuery && songs.length === 0 && onLoadHosannaSample && (
+                        <TouchableOpacity
+                          style={[
+                            styles.emptyImportBtn,
+                            {
+                              backgroundColor: theme.btnBg,
+                              borderColor: theme.activeKeyBg || '#0284c7',
+                              borderWidth: 1.5,
+                              marginTop: 10,
+                            },
+                          ]}
+                          onPress={onLoadHosannaSample}
+                          activeOpacity={0.8}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Feather
+                              name="music"
+                              size={15}
+                              color={theme.activeKeyBg || '#0284c7'}
+                              style={{ marginRight: 8 }}
+                            />
+                            <Text style={[styles.emptyImportBtnText, { color: theme.activeKeyBg || '#0284c7' }]}>
+                              Cargar canción de muestra
                             </Text>
                           </View>
                         </TouchableOpacity>
