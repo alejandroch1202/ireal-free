@@ -19,7 +19,8 @@ export function useMetronome({
   // Compute beats per measure from time signature (e.g. "4/4" -> 4, "3/4" -> 3, "6/8" -> 6)
   const beatsPerMeasure = parseInt(timeSignature.split('/')[0] || '4', 10) || 4;
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const expectedTimeRef = useRef<number>(0);
   const currentBeatRef = useRef(1);
   const isPlayingRef = useRef(false);
   const bpmRef = useRef(bpm);
@@ -27,16 +28,39 @@ export function useMetronome({
   const prevSongKeyRef = useRef(songKey);
   const prevInitialBpmRef = useRef(initialBpm);
 
-  const stop = useCallback(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
+  const clearTimer = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
     }
+  }, []);
+
+  const scheduleNextTick = useCallback(() => {
+    if (!isPlayingRef.current) return;
+    const intervalMs = (60 / bpmRef.current) * 1000;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    expectedTimeRef.current += intervalMs;
+    // Calculate drift: difference between actual elapsed time and theoretical target time
+    const drift = now - expectedTimeRef.current;
+    const delay = Math.max(0, intervalMs - drift);
+
+    timeoutRef.current = setTimeout(() => {
+      if (!isPlayingRef.current) return;
+      const nextBeat = currentBeatRef.current >= beatsPerMeasure ? 1 : currentBeatRef.current + 1;
+      currentBeatRef.current = nextBeat;
+      setCurrentBeat(nextBeat);
+      metronomeSounds.playClick(nextBeat === 1);
+      scheduleNextTick();
+    }, delay);
+  }, [beatsPerMeasure]);
+
+  const stop = useCallback(() => {
+    clearTimer();
     setIsPlaying(false);
     isPlayingRef.current = false;
     setCurrentBeat(1);
     currentBeatRef.current = 1;
-  }, []);
+  }, [clearTimer]);
 
   // Update BPM ONLY when song changes or initialBpm changes (NEVER when stopping/pausing the metronome)
   useEffect(() => {
@@ -60,27 +84,18 @@ export function useMetronome({
     }
   }, [songKey, initialBpm, stop]);
 
-  const tick = useCallback(() => {
-    const nextBeat = currentBeatRef.current >= beatsPerMeasure ? 1 : currentBeatRef.current + 1;
-    currentBeatRef.current = nextBeat;
-    setCurrentBeat(nextBeat);
-
-    // Audio click (high pitch on beat 1)
-    metronomeSounds.playClick(nextBeat === 1);
-  }, [beatsPerMeasure]);
-
   const start = useCallback(() => {
+    clearTimer();
     currentBeatRef.current = 1;
     setCurrentBeat(1);
     metronomeSounds.playClick(true);
 
-    const intervalMs = (60 / bpmRef.current) * 1000;
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(tick, intervalMs);
-
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    expectedTimeRef.current = now;
     setIsPlaying(true);
     isPlayingRef.current = true;
-  }, [tick]);
+    scheduleNextTick();
+  }, [clearTimer, scheduleNextTick]);
 
   const toggle = useCallback(() => {
     if (isPlayingRef.current) {
@@ -96,12 +111,13 @@ export function useMetronome({
       bpmRef.current = clamped;
       setBpm(clamped);
       if (isPlayingRef.current) {
-        if (timerRef.current) clearInterval(timerRef.current);
-        const intervalMs = (60 / clamped) * 1000;
-        timerRef.current = setInterval(tick, intervalMs);
+        clearTimer();
+        const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        expectedTimeRef.current = now;
+        scheduleNextTick();
       }
     },
-    [tick]
+    [clearTimer, scheduleNextTick]
   );
 
   const stepBpm = useCallback(
@@ -136,12 +152,10 @@ export function useMetronome({
   // Clean up timer on unmount
   useEffect(() => {
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
+      clearTimer();
       metronomeSounds.cleanup();
     };
-  }, []);
+  }, [clearTimer]);
 
   return {
     isPlaying,

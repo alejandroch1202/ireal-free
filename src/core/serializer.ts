@@ -97,26 +97,56 @@ export function serializeBar(
     out += `N${bar.ending}`;
   }
 
-  // 8. Chords, Repeat Measure '%', or Spacers
+  // 8. Chords, Pulses, Repeat Measure '%', or Spacers
   if (bar.isRepeatMeasure) {
-    out += 'x   ';
+    out += ' x   ';
   } else if (bar.isDoubleRepeatMeasure) {
-    out += 'r   ';
+    out += ' r   ';
+  } else if (
+    bar.elements &&
+    bar.elements.length > 0 &&
+    bar.elements.some(
+      (e) => e.type === 'pulse' || (e.type === 'chord' && (e.isPassing || e.isSmall))
+    )
+  ) {
+    const elemTokens = bar.elements.map((el) => {
+      if (el.type === 'pulse') {
+        if (el.passingChord) {
+          return `p(${chordToIReal(el.passingChord.displayText || el.passingChord.raw)})`;
+        }
+        return 'p';
+      }
+      const cStr = chordToIReal(el.chord.displayText || el.chord.raw);
+      if (el.isPassing) return `(${cStr})`;
+      if (el.isSmall) return `s${cStr}`;
+      return cStr;
+    });
+    out += ` ${elemTokens.join(',')} `;
   } else if (bar.chords && bar.chords.length > 0) {
     const chordStrings = bar.chords.map((c) => chordToIReal(c.displayText || c.raw));
     if (chordStrings.length === 1) {
-      out += `${chordStrings[0]}   `;
+      out += ` ${chordStrings[0]}   `;
     } else {
-      out += `${chordStrings.join(' ')} `;
+      out += ` ${chordStrings.join(' ')} `;
     }
   } else {
-    out += '   ';
+    // Official iReal Pro blank / no-chord measure token ('n') so empty measures persist across save/reload
+    out += ' n   ';
   }
 
-  // 9. Bottom Annotations (e.g. <Al Verso>, <Fine>, <Break>)
+  // 9a. Top Annotations (e.g. <*724x>, <*72Intro Solo Batería>)
+  if (bar.topAnnotations && bar.topAnnotations.length > 0) {
+    for (const ann of bar.topAnnotations) {
+      const safeAnn = ann.replace(/=/g, '-').replace(/[<>]/g, '');
+      out += `<*72${safeAnn}> `;
+    }
+  }
+
+  // 9b. Bottom Annotations (e.g. <*03Al Verso>, <*03Fine>, <*03Break>)
   if (bar.bottomAnnotations && bar.bottomAnnotations.length > 0) {
     for (const ann of bar.bottomAnnotations) {
-      out += `<${ann}> `;
+      const safeAnn = ann.replace(/=/g, '-').replace(/[<>]/g, '');
+      out += `<*03${safeAnn}> `;
     }
   }
 
@@ -126,14 +156,14 @@ export function serializeBar(
   } else if (bar.rightBarline === ']' || bar.rightBarline === '}' || bar.rightBarline === 'Z') {
     out += bar.rightBarline;
   } else {
-    // Normal single barline
+    // Normal single barline (if final bar of song has plain '|', close with 'Z' so empty trailing bars persist)
     if (index + 1 < allBars.length) {
       const next = allBars[index + 1];
       if (!next.isRowBreakBefore && next.leftBarline === '|') {
         out += '|';
       }
     } else {
-      out += '|';
+      out += 'Z';
     }
   }
 
@@ -158,16 +188,19 @@ export function serializeSongToChordString(song: SongAST): string {
  * Builds an authentic iReal Pro URL (irealb://) from a SongAST with updated chords and metadata.
  */
 export function serializeSongToIRealUrl(song: SongAST): string {
+  const sanitizeField = (val: string, fallback: string) =>
+    (val || '').replace(/=/g, '-').trim() || fallback;
+
   const chordString = serializeSongToChordString(song);
-  const title = song.title || 'Untitled';
-  const composer = song.composer || 'Unknown';
-  const style = song.style || 'Pop';
-  const key = song.originalKey || song.currentKey || 'C';
+  const title = sanitizeField(song.title, 'Untitled');
+  const composer = sanitizeField(song.composer, 'Unknown');
+  const style = sanitizeField(song.style, 'Pop');
+  const key = sanitizeField(song.originalKey || song.currentKey, 'C');
   const tempo = song.tempo || 115;
   const repeats = song.repeats || 3;
 
   const urlPayload = `${title}=${composer}==${style}=${key}=0=${chordString}=${style}=${tempo}=${repeats}`;
-  return ensureIRealScheme(urlPayload);
+  return ensureIRealScheme(`irealb://${encodeURIComponent(urlPayload)}`);
 }
 
 /**

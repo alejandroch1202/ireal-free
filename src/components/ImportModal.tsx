@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  FlatList,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -55,7 +56,20 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   };
 
   const buildStandaloneContent = (songData: ParsedIRealUrlResult): string => {
-    const songUrl = `irealb://${encodeURIComponent(songData.title)}=${encodeURIComponent(songData.composer)}==${encodeURIComponent(songData.style)}=${encodeURIComponent(songData.key)}=${encodeURIComponent(songData.tempoField || '4')}=${songData.obfuscatedChords}=${encodeURIComponent(songData.accompanimentStyle || '')}=${songData.tempo || 120}=${songData.repeats || 3}`;
+    const cleanField = (val: string, fallback: string) =>
+      (val || '').replace(/=/g, '-').trim() || fallback;
+    const payload = `${cleanField(songData.title, 'Untitled')}=${cleanField(
+      songData.composer,
+      'Unknown'
+    )}==${cleanField(songData.style, 'Pop')}=${cleanField(
+      songData.key,
+      'C'
+    )}=${cleanField(songData.tempoField || '0', '0')}=${
+      songData.obfuscatedChords
+    }=${cleanField(songData.accompanimentStyle || songData.style, 'Pop')}=${
+      songData.tempo || 120
+    }=${songData.repeats || 3}`;
+    const songUrl = `irealb://${encodeURIComponent(payload)}`;
     return buildIRealHtml(songData.title, songData.composer, songUrl);
   };
 
@@ -269,10 +283,16 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                   </Text>
                 </View>
               </TouchableOpacity>
-              <ScrollView style={styles.playlistList}>
-                {playlistSongs.map((s, idx) => (
+              <FlatList
+                style={styles.playlistList}
+                data={playlistSongs}
+                keyExtractor={(s, idx) => `${s.title}-${idx}`}
+                initialNumToRender={15}
+                maxToRenderPerBatch={15}
+                windowSize={7}
+                keyboardShouldPersistTaps="handled"
+                renderItem={({ item: s }) => (
                   <TouchableOpacity
-                    key={`${s.title}-${idx}`}
                     style={[
                       styles.playlistItem,
                       {
@@ -284,7 +304,9 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                     activeOpacity={0.7}
                   >
                     <View style={styles.playlistItemText}>
-                      <Text style={[styles.playlistSongTitle, { color: theme.textPrimary }]}>{s.title}</Text>
+                      <Text style={[styles.playlistSongTitle, { color: theme.textPrimary }]}>
+                        {s.title}
+                      </Text>
                       <Text style={[styles.playlistSongComposer, { color: theme.textSecondary }]}>
                         {s.composer} • {s.style}
                       </Text>
@@ -298,11 +320,13 @@ export const ImportModal: React.FC<ImportModalProps> = ({
                         },
                       ]}
                     >
-                      <Text style={[styles.playlistKeyText, { color: theme.timeSigText }]}>{s.key}</Text>
+                      <Text style={[styles.playlistKeyText, { color: theme.timeSigText }]}>
+                        {s.key}
+                      </Text>
                     </View>
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
+                )}
+              />
               <TouchableOpacity
                 style={styles.backBtn}
                 onPress={() => setPlaylistSongs([])}

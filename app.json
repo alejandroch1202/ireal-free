@@ -2,7 +2,7 @@
   "expo": {
     "name": "iReal Free",
     "slug": "ireal-free",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "scheme": "irealb",
     "orientation": "default",
     "icon": "./assets/icon.png",
@@ -24,7 +24,7 @@
     },
     "android": {
       "package": "com.irealfree.app",
-      "versionCode": 1,
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#EA580C",
         "foregroundImage": "./assets/android-icon-foreground.png",

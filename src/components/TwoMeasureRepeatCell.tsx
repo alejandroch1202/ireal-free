@@ -15,7 +15,7 @@ export interface TwoMeasureRepeatCellProps {
   isLastInRow?: boolean;
 }
 
-export const TwoMeasureRepeatCell: React.FC<TwoMeasureRepeatCellProps> = ({
+const TwoMeasureRepeatCellInner: React.FC<TwoMeasureRepeatCellProps> = ({
   firstBar,
   secondBar,
   theme,
@@ -293,6 +293,8 @@ export const TwoMeasureRepeatCell: React.FC<TwoMeasureRepeatCellProps> = ({
     </View>
   );
 };
+
+export const TwoMeasureRepeatCell = React.memo(TwoMeasureRepeatCellInner);
 
 const styles = StyleSheet.create({
   container: {

@@ -20,7 +20,7 @@ interface TopBarProps {
   onOpenEditSong?: () => void;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({
+const TopBarInner: React.FC<TopBarProps> = ({
   song,
   originalKey,
   theme,
@@ -173,6 +173,8 @@ export const TopBar: React.FC<TopBarProps> = ({
     </View>
   );
 };
+
+export const TopBar = React.memo(TopBarInner);
 
 const styles = StyleSheet.create({
   container: {

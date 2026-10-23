@@ -569,15 +569,14 @@ export function parseIRealSong(songData: ParsedIRealUrlResult): SongAST {
     const cur = bars[i];
     const isPreamble =
       i === 0 &&
+      cur.leftBarline === '|' &&
       cur.chords.length === 0 &&
       cur.elements.length === 0 &&
       !cur.isRepeatMeasure &&
       !cur.isDoubleRepeatMeasure &&
       cur.rightBarline !== ']' &&
       i + 1 < bars.length &&
-      (bars[i + 1].leftBarline === '{' ||
-        bars[i + 1].chords.length > 0 ||
-        bars[i + 1].isRepeatMeasure);
+      (bars[i + 1].leftBarline === '{' || bars[i + 1].leftBarline === '[');
 
     if (isPreamble) {
       const next = bars[i + 1];

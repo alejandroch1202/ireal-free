@@ -19,14 +19,54 @@ export function sanitizeFilename(name: string): string {
 }
 
 /**
- * Ensures an iReal Pro URL string starts with a valid scheme (irealb://).
+ * Escapes HTML special characters in user-provided metadata (title, composer, playlist name)
+ * so generated XHTML documents are always well-formed and safe.
+ */
+export function escapeHtml(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Encodes unsafe URI characters (including '#', '?', '&', spaces, brackets, pipes, quotes,
+ * angle brackets, and non-ASCII characters) inside an iReal Pro URL payload without
+ * double-encoding already valid %XX percent-encoded sequences, while preserving '='
+ * delimiters for standalone snippets and '===' playlist joins.
+ */
+export function encodeIRealPayloadSafely(payload: string): string {
+  if (!payload) return '';
+  return payload.replace(/%[0-9A-Fa-f]{2}|[^A-Za-z0-9\-_.!~*'()=;/:@+$,]/gu, (match) => {
+    if (match.length === 3 && match[0] === '%') {
+      return match;
+    }
+    return encodeURIComponent(match);
+  });
+}
+
+/**
+ * Ensures an iReal Pro URL string starts with a valid scheme (irealb://) and has all
+ * unsafe characters (such as '#' in sharp keys/chords or spaces) properly percent-encoded.
  */
 export function ensureIRealScheme(urlOrSnippet: string): string {
   const trimmed = urlOrSnippet.trim();
-  if (trimmed.startsWith('irealb://') || trimmed.startsWith('irealbook://')) {
-    return trimmed;
+  if (/^irealbook:\/\//i.test(trimmed)) {
+    const payload = trimmed.slice('irealbook://'.length);
+    return `irealbook://${encodeIRealPayloadSafely(payload)}`;
   }
-  return `irealb://${encodeURI(trimmed)}`;
+  if (/^irealb:\/\//i.test(trimmed)) {
+    const payload = trimmed.slice('irealb://'.length);
+    return `irealb://${encodeIRealPayloadSafely(payload)}`;
+  }
+  if (/^ireal:\/\//i.test(trimmed)) {
+    const payload = trimmed.slice('ireal://'.length);
+    return `irealb://${encodeIRealPayloadSafely(payload)}`;
+  }
+  return `irealb://${encodeIRealPayloadSafely(trimmed)}`;
 }
 
 /**
@@ -55,8 +95,11 @@ export function buildIRealHtml(
     anchorTag = trimmed;
   } else {
     // Plain URL or song string
-    const cleanUrl = ensureIRealScheme(trimmed || `${title}=${composer}===Pop=C=1=`);
-    anchorTag = `<a href="${cleanUrl}">${title}</a> - ${composer}`;
+    const safeField = (s: string) => (s || '').replace(/=/g, '-').trim();
+    const cleanUrl = ensureIRealScheme(
+      trimmed || `${safeField(title)}=${safeField(composer)}===Pop=C=1=`
+    );
+    anchorTag = `<a href="${cleanUrl}">${escapeHtml(title)}</a> - ${escapeHtml(composer)}`;
   }
 
   return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">

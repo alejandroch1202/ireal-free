@@ -1,7 +1,12 @@
 import { Platform, Share } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
-import { buildIRealHtml, sanitizeFilename } from '../core/exporter';
+import {
+  buildIRealHtml,
+  ensureIRealScheme,
+  escapeHtml,
+  sanitizeFilename,
+} from '../core/exporter';
 
 export interface ExportResult {
   success: boolean;
@@ -121,26 +126,38 @@ export async function exportAndShareLibraryHtml(
 
   for (const s of songs) {
     const raw = (s.rawInput || '').trim();
-    const urlMatch = raw.match(/(?:ireal|irealb|irealbook):\/\/([^\s"'>]+)/i);
-    if (urlMatch) {
-      const strippedPayload = urlMatch[1];
+    const safeTitle = escapeHtml(s.title);
+    const safeComposer = escapeHtml(s.composer || 'Unknown');
+
+    // Prefer extracting full href="..." first (safely captures legacy links even if they had spaces)
+    const hrefMatch = raw.match(/href=["']([^"']*(?:ireal|irealb|irealbook):\/\/[^"']+)["']/i);
+    const directMatch = !hrefMatch
+      ? raw.match(/((?:ireal|irealb|irealbook):\/\/[^\s"'>]+)/i)
+      : null;
+    const rawSchemeUrl = hrefMatch ? hrefMatch[1] : directMatch ? directMatch[1] : null;
+
+    if (rawSchemeUrl) {
+      const normalizedUrl = ensureIRealScheme(rawSchemeUrl);
+      const strippedPayload = normalizedUrl.replace(/^ireal(?:b|book)?:\/\//i, '');
       songPayloads.push(strippedPayload);
       songAnchorTags.push(
-        `<a href="irealb://${strippedPayload}">${s.title}</a> - ${s.composer || 'Unknown'}`
+        `<a href="irealb://${strippedPayload}">${safeTitle}</a> - ${safeComposer}`
       );
     } else {
-      const encTitle = encodeURIComponent(s.title);
-      const encComposer = encodeURIComponent(s.composer || 'Unknown');
-      const encKey = encodeURIComponent(s.key || 'C');
+      const cleanField = (val: string) => val.replace(/=/g, '-').trim();
+      const encTitle = encodeURIComponent(cleanField(s.title || 'Untitled'));
+      const encComposer = encodeURIComponent(cleanField(s.composer || 'Unknown'));
+      const encKey = encodeURIComponent(cleanField(s.key || 'C'));
       const payload = `${encTitle}=${encComposer}==Pop=${encKey}=1=`;
       songPayloads.push(payload);
       songAnchorTags.push(
-        `<a href="irealb://${payload}">${s.title}</a> - ${s.composer || 'Unknown'}`
+        `<a href="irealb://${payload}">${safeTitle}</a> - ${safeComposer}`
       );
     }
   }
 
-  const encodedPlaylistName = encodeURIComponent(playlistName);
+  const encodedPlaylistName = encodeURIComponent(playlistName.replace(/=/g, '-').trim());
+  const safePlaylistName = escapeHtml(playlistName);
   const combinedPlaylistUrl = `irealb://${songPayloads.join('===')}===${encodedPlaylistName}`;
 
   const htmlContent = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -148,7 +165,7 @@ export async function exportAndShareLibraryHtml(
    <head>
       <meta name="viewport" content="width=device-width, minimum-scale=1, maximum-scale=1" />
       <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-      <title>iReal Pro - ${playlistName}</title>
+      <title>iReal Pro - ${safePlaylistName}</title>
       <style type="text/css">
          .help {
          font-size: small;
@@ -158,7 +175,7 @@ export async function exportAndShareLibraryHtml(
    </head>
    <body style="color: rgb(230, 227, 218); background-color: rgb(27, 39, 48); font-family: Helvetica,Arial,sans-serif;" alink="#b2e0ff" link="#94d5ff" vlink="#b2e0ff">
       <br/><br/>
-      <h3><a href="${combinedPlaylistUrl}">${playlistName} (${songs.length} canciones)</a><br/><br/></h3>
+      <h3><a href="${combinedPlaylistUrl}">${safePlaylistName} (${songs.length} canciones)</a><br/><br/></h3>
       <div style="margin-top: 10px; margin-bottom: 20px;">
         ${songAnchorTags.map((tag) => `<div>${tag}</div><br/>`).join('\n        ')}
       </div>

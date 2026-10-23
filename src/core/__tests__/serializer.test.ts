@@ -135,3 +135,31 @@ test('Multiple songs in a playlist HTML export can be extracted and reloaded acc
   assert.equal(extracted[1].title, 'Cancion Dos');
   assert.equal(extracted[1].key, 'G');
 });
+
+test('Serializing sharp keys and chords (F#, C#m, G#m) properly encodes # so URI never truncates', () => {
+  const htmlPath = path.resolve(process.cwd(), 'charts/Celebraré.html');
+  const html = fs.readFileSync(htmlPath, 'utf-8');
+  const [songData] = extractIRealSongs(html);
+  const ast = parseIRealSong(songData);
+
+  const sharpAst = {
+    ...ast,
+    title: 'Celebraré #1 (Key = F#)',
+    composer: 'Gateway & Worship',
+    originalKey: 'F#',
+    currentKey: 'F#',
+  };
+
+  const url = serializeSongToIRealUrl(sharpAst);
+  // Raw '#' must never appear unencoded in the generated irealb:// URI
+  assert.equal(url.includes('#'), false);
+  assert.ok(url.includes('%23'));
+
+  const exportedHtml = serializeSongToIRealHtml(sharpAst);
+  const [reloaded] = extractIRealSongs(exportedHtml);
+  const reparsed = parseIRealSong(reloaded);
+
+  assert.equal(reparsed.originalKey, 'F#');
+  assert.equal(reparsed.totalBars, ast.totalBars);
+  assert.equal(reparsed.rows.length, ast.rows.length);
+});

@@ -12,9 +12,11 @@ interface MeasureCellProps {
   fontScale?: number;
   cellWidth?: string;
   onPressBar?: (bar: BarAST, chordIndex?: number) => void;
+  onEditAnnotation?: (annotationText: string, bar: BarAST) => void;
+  isEditMode?: boolean;
 }
 
-export const MeasureCell: React.FC<MeasureCellProps> = ({
+const MeasureCellInner: React.FC<MeasureCellProps> = ({
   bar,
   isFirstInRow,
   isLastInRow,
@@ -22,6 +24,8 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
   fontScale = 1.0,
   cellWidth,
   onPressBar,
+  onEditAnnotation,
+  isEditMode = false,
 }) => {
   const isRepeatStart = bar.leftBarline === '{';
   const isSectionStart = bar.leftBarline === '[';
@@ -39,24 +43,28 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
   // Time signature parts (e.g. "4/4" -> ["4", "4"])
   const timeSigParts = bar.timeSignature ? bar.timeSignature.split('/') : null;
 
+  const elementCount = bar.elements ? bar.elements.length : chordCount;
+  const isDenseBar = elementCount >= 3;
+
   // Single chords stay perfectly centered at the exact midpoint of the measure cell.
-  // Multiple chords keep lateral padding so edge chords never touch barlines.
+  // Multiple chords/pulses keep lateral padding so edge items never touch barlines,
+  // tightening slightly on 3-4 beat measures so chords always have room.
   const leftPad = isSingleChord
     ? 0
     : timeSigParts && timeSigParts.length === 2
-    ? Math.round(18 * fontScale)
+    ? Math.round((isDenseBar ? 14 : 18) * fontScale)
     : isRepeatStart
-    ? Math.round(15 * fontScale)
+    ? Math.round((isDenseBar ? 11 : 15) * fontScale)
     : isSectionStart
-    ? Math.round(6 * fontScale)
+    ? Math.round((isDenseBar ? 5 : 6) * fontScale)
     : 0;
 
   const rightPad = isSingleChord
     ? 0
     : isRepeatEnd
-    ? Math.round(15 * fontScale)
+    ? Math.round((isDenseBar ? 11 : 15) * fontScale)
     : isFinalBar || isSectionEnd || isDoubleBarline
-    ? Math.round(8 * fontScale)
+    ? Math.round((isDenseBar ? 6 : 8) * fontScale)
     : 0;
 
   // Prominent center direction (e.g. "CORO", "FINAL", "INTRO") if measure has no chords
@@ -159,11 +167,33 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
         {/* Top Indicators: Top Annotations (e.g. 3x, 4x) on right */}
         {bar.topAnnotations && bar.topAnnotations.length > 0 ? (
           <View style={styles.topRightAnnotation}>
-            {bar.topAnnotations.map((ann, i) => (
-              <Text key={i} style={[styles.topAnnotationText, { color: theme.textPrimary }]}>
-                {ann}
-              </Text>
-            ))}
+            {bar.topAnnotations.map((ann, i) => {
+              const content = (
+                <Text
+                  key={i}
+                  style={[
+                    styles.topAnnotationText,
+                    { color: theme.annotationColor || theme.textPrimary },
+                    onEditAnnotation && { textDecorationLine: 'underline' },
+                  ]}
+                >
+                  {ann}
+                </Text>
+              );
+              if (onEditAnnotation) {
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => onEditAnnotation(ann, bar)}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    {content}
+                  </TouchableOpacity>
+                );
+              }
+              return content;
+            })}
           </View>
         ) : null}
 
@@ -202,7 +232,12 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
 
           {/* Centered Direction (e.g. CORO, FINAL) */}
           {centerAnnotation ? (
-            <View style={styles.centerAnnotationContainer}>
+            <TouchableOpacity
+              style={styles.centerAnnotationContainer}
+              disabled={!onEditAnnotation}
+              onPress={onEditAnnotation ? () => onEditAnnotation(centerAnnotation, bar) : undefined}
+              activeOpacity={0.7}
+            >
               <Text
                 style={[
                   styles.centerAnnotationText,
@@ -210,11 +245,12 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
                     color: theme.textPrimary,
                     fontSize: Math.round(13.5 * fontScale),
                   },
+                  onEditAnnotation && { textDecorationLine: 'underline' },
                 ]}
               >
                 {centerAnnotation}
               </Text>
-            </View>
+            </TouchableOpacity>
           ) : bar.isRepeatMeasure ? (
             /* Repeat Measure Symbol % */
             <View style={styles.repeatMeasureContainer}>
@@ -235,74 +271,185 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
             </View>
           ) : bar.elements && bar.elements.length > 0 ? (
             /* Sequential Elements (chords & beat pulses placed in accurate rhythmic order) */
-            <View
-              style={[
-                styles.chordsRow,
-                bar.elements.length === 1 && styles.chordsRowSingle,
-              ]}
-            >
-              {(() => {
-                let chordCounter = 0;
-                return bar.elements.map((elem, idx) => {
-                  if (elem.type === 'pulse') {
-                    const pulseChordIdx = elem.passingChord ? chordCounter++ : undefined;
-                    return (
-                      <View key={`pulse-${idx}`} style={styles.pulseItem}>
-                        {elem.passingChord ? (
-                          <View style={styles.passingChordOnPulse}>
-                            <RenderChord
-                              chord={elem.passingChord}
-                              count={bar.elements.length}
-                              theme={theme}
-                              fontScale={fontScale}
-                              isPassing={true}
-                              onPress={
-                                onPressBar && pulseChordIdx !== undefined
-                                  ? () => onPressBar(bar, pulseChordIdx)
-                                  : undefined
-                              }
-                            />
-                          </View>
-                        ) : null}
-                        <Text
+            (() => {
+              let chordCounter = 0;
+              const elems = bar.elements;
+              const hasPulses = elems.some((e) => e.type === 'pulse');
+              const actualChordCount = elems.filter((e) => e.type === 'chord').length;
+
+              // Build an authentic 4-beat spatial progression when the measure has rhythmic pulses or 4 beats
+              let slots: Array<{
+                key: string;
+                elem: (typeof elems)[number] | null;
+                chordIdx?: number;
+              }> = [];
+
+              if (elems.length === 4) {
+                slots = elems.map((el, i) => ({
+                  key: `slot-${i}`,
+                  elem: el,
+                  chordIdx:
+                    el.type === 'chord'
+                      ? chordCounter++
+                      : el.passingChord
+                      ? chordCounter++
+                      : undefined,
+                }));
+              } else if (elems.length === 3 && elems[0].type === 'pulse' && elems[1].type === 'pulse') {
+                // e.g. "ppA": beat 1 = pulse, beat 2 = pulse, beat 3 = chord A, beat 4 = empty
+                slots = [
+                  { key: 'slot-0', elem: elems[0] },
+                  { key: 'slot-1', elem: elems[1] },
+                  {
+                    key: 'slot-2',
+                    elem: elems[2],
+                    chordIdx: elems[2].type === 'chord' ? chordCounter++ : undefined,
+                  },
+                  { key: 'slot-3', elem: null },
+                ];
+              } else if (elems.length === 3 && elems[0].type === 'chord' && elems[1].type === 'pulse' && elems[2].type === 'pulse') {
+                // e.g. chord on beat 1, pulses on beats 2 and 3, beat 4 empty
+                slots = [
+                  {
+                    key: 'slot-0',
+                    elem: elems[0],
+                    chordIdx: elems[0].type === 'chord' ? chordCounter++ : undefined,
+                  },
+                  { key: 'slot-1', elem: elems[1] },
+                  { key: 'slot-2', elem: elems[2] },
+                  { key: 'slot-3', elem: null },
+                ];
+              } else if (elems.length === 3 && elems[0].type === 'pulse' && elems[1].type === 'chord' && elems[2].type === 'pulse') {
+                // e.g. "pAp": beat 1 = pulse, beat 2 = chord, beat 3 = pulse, beat 4 = empty
+                slots = [
+                  { key: 'slot-0', elem: elems[0] },
+                  {
+                    key: 'slot-1',
+                    elem: elems[1],
+                    chordIdx: chordCounter++,
+                  },
+                  { key: 'slot-2', elem: elems[2] },
+                  { key: 'slot-3', elem: null },
+                ];
+              } else if (elems.length === 2 && elems[0].type === 'pulse' && elems[1].type === 'chord') {
+                // e.g. "pA": beat 1 = pulse, beat 2 = chord, beats 3-4 = empty
+                slots = [
+                  { key: 'slot-0', elem: elems[0] },
+                  {
+                    key: 'slot-1',
+                    elem: elems[1],
+                    chordIdx: chordCounter++,
+                  },
+                  { key: 'slot-2', elem: null },
+                  { key: 'slot-3', elem: null },
+                ];
+              } else {
+                slots = elems.map((el, i) => ({
+                  key: `slot-${i}`,
+                  elem: el,
+                  chordIdx:
+                    el.type === 'chord'
+                      ? chordCounter++
+                      : el.passingChord
+                      ? chordCounter++
+                      : undefined,
+                }));
+              }
+
+              const isGridMode = slots.length === 4 && hasPulses;
+              // Effective density for sizing chords: chords always stay legible and NEVER clip to "..."
+              const sizingCount = hasPulses
+                ? actualChordCount <= 1
+                  ? 2
+                  : 3
+                : Math.max(elems.length, actualChordCount);
+
+              return (
+                <View
+                  style={[
+                    styles.chordsRow,
+                    elems.length === 1 && styles.chordsRowSingle,
+                    isGridMode && styles.chordsRowPulseGrid,
+                  ]}
+                >
+                  {slots.map((slot) => {
+                    if (!slot.elem) {
+                      return <View key={slot.key} style={styles.beatSlotEmpty} />;
+                    }
+
+                    const elem = slot.elem;
+                    if (elem.type === 'pulse') {
+                      const hasPassing = Boolean(elem.passingChord);
+                      return (
+                        <View
+                          key={slot.key}
                           style={[
-                            styles.pulseSlashText,
-                            {
-                              color: theme.textSecondary,
-                              fontSize: Math.round(20 * fontScale),
-                              lineHeight: Math.round(22 * fontScale),
-                            },
+                            styles.pulseItem,
+                            isGridMode &&
+                              (hasPassing ? styles.beatSlotChord : styles.beatSlotPulse),
                           ]}
                         >
-                          /
-                        </Text>
+                          {elem.passingChord ? (
+                            <View style={styles.passingChordOnPulse}>
+                              <RenderChord
+                                chord={elem.passingChord}
+                                count={sizingCount}
+                                theme={theme}
+                                fontScale={fontScale}
+                                isPassing={true}
+                                onPress={
+                                  onPressBar && slot.chordIdx !== undefined
+                                    ? () => onPressBar(bar, slot.chordIdx)
+                                    : undefined
+                                }
+                              />
+                            </View>
+                          ) : null}
+                          <Text
+                            style={[
+                              styles.pulseSlashText,
+                              {
+                                color: theme.textSecondary,
+                                fontSize: Math.round(14.5 * fontScale),
+                                lineHeight: Math.round(18 * fontScale),
+                              },
+                            ]}
+                          >
+                            /
+                          </Text>
+                        </View>
+                      );
+                    }
+
+                    return (
+                      <View
+                        key={slot.key}
+                        style={[
+                          elem.isPassing
+                            ? styles.standalonePassingChordItem
+                            : styles.elementChordItem,
+                          isGridMode && styles.beatSlotChord,
+                        ]}
+                      >
+                        <RenderChord
+                          chord={elem.chord}
+                          count={sizingCount}
+                          theme={theme}
+                          fontScale={fontScale}
+                          isPassing={elem.isPassing}
+                          isSmall={elem.isSmall}
+                          onPress={
+                            onPressBar && slot.chordIdx !== undefined
+                              ? () => onPressBar(bar, slot.chordIdx)
+                              : undefined
+                          }
+                        />
                       </View>
                     );
-                  }
-                  const curChordIdx = chordCounter++;
-                  return (
-                    <View
-                      key={`chord-${elem.chord.raw}-${idx}`}
-                      style={[
-                        elem.isPassing ? styles.standalonePassingChordItem : styles.elementChordItem,
-                      ]}
-                    >
-                      <RenderChord
-                        chord={elem.chord}
-                        count={bar.elements.length}
-                        theme={theme}
-                        fontScale={fontScale}
-                        isPassing={elem.isPassing}
-                        isSmall={elem.isSmall}
-                        onPress={
-                          onPressBar ? () => onPressBar(bar, curChordIdx) : undefined
-                        }
-                      />
-                    </View>
-                  );
-                });
-              })()}
-            </View>
+                  })}
+                </View>
+              );
+            })()
           ) : chordCount > 0 ? (
             /* Fallback chords row */
             <View
@@ -323,8 +470,22 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
               ))}
             </View>
           ) : (
-            /* Empty Measure */
-            <View style={styles.emptyMeasureContainer} />
+            /* Empty Measure (shows subtle + prompt when in Edit Mode) */
+            <View style={styles.emptyMeasureContainer}>
+              {isEditMode && (
+                <Text
+                  style={[
+                    styles.emptyMeasureEditHint,
+                    {
+                      color: theme.textSecondary,
+                      fontSize: Math.round(16 * fontScale),
+                    },
+                  ]}
+                >
+                  +
+                </Text>
+              )}
+            </View>
           )}
         </View>
 
@@ -339,22 +500,36 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
           >
             {remainingBottomAnnotations.map((ann, i) => {
               const isRightAligned = /^(Fine|Al\s|D\.C\.)/i.test(ann);
-              return (
+              const content = (
                 <Text
                   key={i}
                   style={[
                     styles.bottomAnnotationText,
                     {
-                      color: theme.textPrimary,
+                      color: theme.annotationColor || theme.textPrimary,
                       fontSize: Math.round(9.5 * fontScale),
                     },
                     isRightAligned && styles.bottomAnnotationRight,
+                    onEditAnnotation && { textDecorationLine: 'underline' },
                   ]}
                   numberOfLines={2}
                 >
                   {ann}
                 </Text>
               );
+              if (onEditAnnotation) {
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => onEditAnnotation(ann, bar)}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    {content}
+                  </TouchableOpacity>
+                );
+              }
+              return content;
             })}
           </View>
         ) : null}
@@ -384,6 +559,8 @@ export const MeasureCell: React.FC<MeasureCellProps> = ({
   );
 };
 
+export const MeasureCell = React.memo(MeasureCellInner);
+
 interface RenderChordProps {
   chord: ChordToken;
   count: number;
@@ -411,24 +588,28 @@ const RenderChord: React.FC<RenderChordProps> = ({
   const quality = chordPart.slice(root.length);
 
   const baseRoot = isPassing
-    ? 13
+    ? 12
     : isSmall
-    ? (count === 1 ? 20 : count === 2 ? 16 : 13)
-    : (count === 1 ? 28 : count === 2 ? 21 : 16);
+    ? (count === 1 ? 20 : count === 2 ? 17.5 : count === 3 ? 15.5 : 13.5)
+    : (count === 1 ? 28 : count === 2 ? 20.5 : count === 3 ? 17 : 14.5);
   const baseQuality = isPassing
-    ? 9.5
-    : isSmall
-    ? (count === 1 ? 12 : count === 2 ? 10 : 9)
-    : (count === 1 ? 17 : count === 2 ? 14 : 11);
-  const baseBass = isPassing
     ? 9
     : isSmall
-    ? (count === 1 ? 10 : count === 2 ? 9 : 8)
-    : (count === 1 ? 14 : count === 2 ? 12 : 10);
+    ? (count === 1 ? 12 : count === 2 ? 10.5 : count === 3 ? 9.5 : 8.5)
+    : (count === 1 ? 17 : count === 2 ? 13.5 : count === 3 ? 11 : 9.5);
+  const baseBass = isPassing
+    ? 8.5
+    : isSmall
+    ? (count === 1 ? 10 : count === 2 ? 9.5 : 8.5)
+    : (count === 1 ? 14 : count === 2 ? 11.5 : 9.5);
 
   const rootSize = Math.round(baseRoot * fontScale);
   const qualitySize = Math.round(baseQuality * fontScale);
   const bassSize = Math.round(baseBass * fontScale);
+
+  const rootColor = isPassing ? theme.annotationColor || '#e11d48' : theme.chordRoot;
+  const qualityColor = isPassing ? theme.annotationColor || '#e11d48' : theme.chordRoot;
+  const bassColor = isPassing ? theme.annotationColor || '#e11d48' : theme.chordBass;
 
   let chordNode: React.ReactNode;
 
@@ -441,21 +622,21 @@ const RenderChord: React.FC<RenderChordProps> = ({
     chordNode = (
       <View style={[styles.slashChordDiagonal, isPassing && styles.passingSlashChord]}>
         <View style={styles.rootQualityRow}>
-          <Text style={[styles.chordRoot, { fontSize: rootSize, color: theme.chordRoot }]}>
+          <Text style={[styles.chordRoot, { fontSize: rootSize, color: rootColor }]}>
             {root}
           </Text>
           {quality ? (
-            <Text style={[styles.chordQuality, { fontSize: qualitySize, color: theme.chordRoot }]}>
+            <Text style={[styles.chordQuality, { fontSize: qualitySize, color: qualityColor }]}>
               {quality}
             </Text>
           ) : null}
         </View>
 
         <View style={[styles.bassSlashRow, { marginTop: bassOffsetTop }]}>
-          <Text style={[styles.slashChar, { fontSize: slashSize, color: theme.chordBass }]}>
+          <Text style={[styles.slashChar, { fontSize: slashSize, color: bassColor }]}>
             /
           </Text>
-          <Text style={[styles.chordBassSub, { fontSize: bassSize, color: theme.chordBass }]}>
+          <Text style={[styles.chordBassSub, { fontSize: bassSize, color: bassColor }]}>
             {bassNote}
           </Text>
         </View>
@@ -464,16 +645,16 @@ const RenderChord: React.FC<RenderChordProps> = ({
   } else {
     chordNode = (
       <View style={[styles.chordWrapper, isPassing && styles.passingChordWrapper]}>
-        <Text style={styles.chordText} numberOfLines={1}>
-          <Text style={[styles.chordRoot, { fontSize: rootSize, color: theme.chordRoot }]}>
+        <View style={styles.rootQualityRow}>
+          <Text style={[styles.chordRoot, { fontSize: rootSize, color: rootColor }]}>
             {root}
           </Text>
           {quality ? (
-            <Text style={[styles.chordQuality, { fontSize: qualitySize, color: theme.chordRoot }]}>
+            <Text style={[styles.chordQuality, { fontSize: qualitySize, color: qualityColor }]}>
               {quality}
             </Text>
           ) : null}
-        </Text>
+        </View>
       </View>
     );
   }
@@ -557,10 +738,14 @@ const styles = StyleSheet.create({
   chordsRowSingle: {
     justifyContent: 'center',
   },
+  chordsRowPulseGrid: {
+    justifyContent: 'space-between',
+  },
   chordWrapper: {
+    flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 1,
+    paddingHorizontal: 0.5,
   },
   chordText: {
     textAlign: 'center',
@@ -573,16 +758,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   slashChordDiagonal: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'center',
-    paddingHorizontal: 1,
+    paddingHorizontal: 0.5,
   },
   rootQualityRow: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'baseline',
   },
   bassSlashRow: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'baseline',
     marginLeft: 1,
@@ -603,20 +791,41 @@ const styles = StyleSheet.create({
   pulseItem: {
     justifyContent: 'flex-end',
     alignItems: 'center',
-    paddingHorizontal: 2,
-    minWidth: 16,
+    paddingHorizontal: 1,
+    minWidth: 6,
+  },
+  beatSlotPulse: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 5,
+    paddingHorizontal: 0,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  beatSlotChord: {
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  beatSlotEmpty: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 4,
   },
   passingChordOnPulse: {
+    flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 2,
+    marginBottom: 1,
   },
   standalonePassingChordItem: {
+    flexShrink: 0,
     alignSelf: 'flex-start',
     marginTop: 2,
     marginLeft: 2,
   },
   elementChordItem: {
+    flexShrink: 0,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -712,6 +921,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  emptyMeasureEditHint: {
+    fontWeight: '700',
+    opacity: 0.4,
   },
   bottomAnnotationsRow: {
     position: 'absolute',

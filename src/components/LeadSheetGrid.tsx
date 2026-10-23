@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { SongAST, BarAST } from '../types/ireal';
 import type { ThemeColors } from '../theme/theme';
@@ -12,18 +12,76 @@ interface LeadSheetGridProps {
   fontScale?: number;
   onEditBar?: (bar: BarAST, chordIndex?: number) => void;
   onEditSection?: (rowIndex: number, currentLabel: string) => void;
+  onEditAnnotation?: (annotationText: string, bar?: BarAST, rowIndex?: number) => void;
+  onAppendBarsToSection?: (rowIndex: number, count: number) => void;
+  onAppendBarsToRow?: (rowIndex: number, count: number) => void;
+  onDuplicateSection?: (rowIndex: number, placement?: 'after' | 'end') => void;
+  onDeleteSection?: (rowIndex: number) => void;
+  onDeleteRow?: (rowIndex: number) => void;
+  onOpenAddSection?: () => void;
   onLoadHosannaSample?: () => void;
+  isEditMode?: boolean;
+  onToggleEditMode?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
 }
 
-export const LeadSheetGrid: React.FC<LeadSheetGridProps> = ({
+const LeadSheetGridInner: React.FC<LeadSheetGridProps> = ({
   song,
   theme,
   fontScale = 1.0,
   onEditBar,
   onEditSection,
+  onEditAnnotation,
+  onAppendBarsToSection,
+  onAppendBarsToRow,
+  onDuplicateSection,
+  onDeleteSection,
+  onDeleteRow,
+  onOpenAddSection,
   onLoadHosannaSample,
+  isEditMode = false,
+  onToggleEditMode,
+  canUndo = false,
+  canRedo = false,
+  onUndo,
+  onRedo,
 }) => {
   const rowMarginBottom = Math.max(5, Math.round(15 * fontScale));
+
+  const confirmDeleteSection = (rowIndex: number, label: string) => {
+    if (!onDeleteSection) return;
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(`¿Eliminar la sección "${label}" y todos sus compases?`)) {
+        onDeleteSection(rowIndex);
+      }
+      return;
+    }
+    Alert.alert(
+      'Eliminar sección',
+      `¿Eliminar la sección "${label}" junto con todos sus compases?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Eliminar', style: 'destructive', onPress: () => onDeleteSection(rowIndex) },
+      ]
+    );
+  };
+
+  const confirmDeleteRow = (rowIndex: number) => {
+    if (!onDeleteRow) return;
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm('¿Eliminar esta fila de compases?')) {
+        onDeleteRow(rowIndex);
+      }
+      return;
+    }
+    Alert.alert('Eliminar fila', '¿Eliminar los compases de esta fila?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Eliminar', style: 'destructive', onPress: () => onDeleteRow(rowIndex) },
+    ]);
+  };
 
   return (
     <ScrollView
@@ -32,6 +90,98 @@ export const LeadSheetGrid: React.FC<LeadSheetGridProps> = ({
       showsVerticalScrollIndicator={true}
     >
       <View style={styles.sheetContainer}>
+        {/* Visual Edit Mode Active Banner with Undo / Redo */}
+        {isEditMode && (
+          <View
+            style={[
+              styles.editModeBanner,
+              {
+                backgroundColor: theme.cardBackground,
+                borderColor: theme.activeKeyBg || '#0284c7',
+              },
+            ]}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 6 }}>
+              <Feather
+                name="edit-3"
+                size={15}
+                color={theme.activeKeyBg || '#0284c7'}
+                style={{ marginRight: 7 }}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.editModeBannerText, { color: theme.textPrimary }]}>
+                  Modo Edición
+                </Text>
+                <Text
+                  style={[styles.editModeBannerSub, { color: theme.textSecondary }]}
+                  numberOfLines={1}
+                >
+                  Toca compases, títulos o notas
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.editBannerActions}>
+              {onUndo && (
+                <TouchableOpacity
+                  style={[
+                    styles.editHistoryBtn,
+                    { backgroundColor: theme.btnBg, borderColor: theme.btnBorder },
+                    !canUndo && styles.editHistoryDisabled,
+                  ]}
+                  onPress={onUndo}
+                  disabled={!canUndo}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                  accessibilityLabel="Deshacer último cambio"
+                >
+                  <Feather name="rotate-ccw" size={13} color={theme.textPrimary} />
+                  <Text style={[styles.editHistoryBtnText, { color: theme.textPrimary }]}>
+                    Deshacer
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {onRedo && (
+                <TouchableOpacity
+                  style={[
+                    styles.editRedoIconBtn,
+                    { backgroundColor: theme.btnBg, borderColor: theme.btnBorder },
+                    !canRedo && styles.editHistoryDisabled,
+                  ]}
+                  onPress={onRedo}
+                  disabled={!canRedo}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                  accessibilityLabel="Rehacer cambio"
+                >
+                  <Feather name="rotate-cw" size={13} color={theme.textPrimary} />
+                </TouchableOpacity>
+              )}
+
+              {onToggleEditMode && (
+                <TouchableOpacity
+                  style={[
+                    styles.editModeDoneBtn,
+                    { backgroundColor: theme.activeKeyBg || '#0284c7' },
+                  ]}
+                  onPress={onToggleEditMode}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[
+                      styles.editModeDoneBtnText,
+                      { color: theme.activeKeyText || '#ffffff' },
+                    ]}
+                  >
+                    Listo
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+
         {/* Authentic iReal Sheet Header: Style (left), Song Title (center), Composer (right) */}
         <View style={styles.sheetHeader}>
           <Text
@@ -203,58 +353,179 @@ export const LeadSheetGrid: React.FC<LeadSheetGridProps> = ({
               });
             });
 
+            const sectionDisplayName = row.sectionLabel || `${sectionLetter}${sectionSuffix}`;
+
             return (
               <View key={row.rowKey} style={styles.rowWrapper}>
-                {/* Clean, natural Section Mark with prominent Segno / Coda signs */}
-                {(hasSection || row.sectionSign) && (
+                {/* Clean, natural Section Mark with prominent Segno / Coda signs & Edit Mode controls */}
+                {hasSection || row.sectionSign ? (
                   <View style={styles.sectionHeaderLine}>
-                    {hasSection && (
-                      <TouchableOpacity
-                        onPress={
-                          onEditSection
-                            ? () =>
-                                onEditSection(
-                                  row.rowIndex,
-                                  row.sectionLabel || `${sectionLetter}${sectionSuffix}`
-                                )
-                            : undefined
-                        }
-                        disabled={!onEditSection}
-                        activeOpacity={0.7}
-                        style={styles.sectionHeaderBtn}
-                        accessibilityRole={onEditSection ? 'button' : undefined}
-                        accessibilityLabel={`Editar sección ${row.sectionLabel || `${sectionLetter}${sectionSuffix}`}`}
-                      >
-                        <Text style={[styles.sectionTitleText, { color: theme.textPrimary }]}>
-                          {row.sectionLabel || `${sectionLetter}${sectionSuffix}`}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                      {hasSection && (
+                        <TouchableOpacity
+                          onPress={
+                            isEditMode && onEditSection
+                              ? () => onEditSection(row.rowIndex, sectionDisplayName)
+                              : undefined
+                          }
+                          disabled={!isEditMode || !onEditSection}
+                          activeOpacity={0.7}
+                          style={styles.sectionHeaderBtn}
+                          accessibilityRole={isEditMode && onEditSection ? 'button' : undefined}
+                          accessibilityLabel={`Editar sección ${sectionDisplayName}`}
+                        >
+                          <Text style={[styles.sectionTitleText, { color: theme.textPrimary }]}>
+                            {sectionDisplayName}
+                          </Text>
+                          {isEditMode && Boolean(onEditSection) && (
+                            <Feather
+                              name="edit-2"
+                              size={11}
+                              color={theme.activeKeyBg || '#0284c7'}
+                              style={{ marginLeft: 5 }}
+                            />
+                          )}
+                        </TouchableOpacity>
+                      )}
+                      {row.sectionSign && (
+                        <Text
+                          style={[
+                            styles.sectionSignText,
+                            {
+                              color: theme.textPrimary,
+                              fontSize: Math.round((row.sectionSign === 'coda' ? 42 : 24) * fontScale),
+                              lineHeight: Math.round((row.sectionSign === 'coda' ? 44 : 26) * fontScale),
+                              marginLeft: hasSection ? 6 : 0,
+                            },
+                          ]}
+                        >
+                          {row.sectionSign === 'segno' ? '𝄋' : '𝄌'}
                         </Text>
-                        {Boolean(onEditSection) && (
-                          <Feather
-                            name="edit-2"
-                            size={11}
-                            color={theme.textSecondary}
-                            style={{ marginLeft: 5, opacity: 0.7 }}
-                          />
+                      )}
+                    </View>
+
+                    {/* Quick Section Actions in Edit Mode */}
+                    {isEditMode && hasSection && (
+                      <View style={styles.rowEditActions}>
+                        {onAppendBarsToSection && (
+                          <>
+                            <TouchableOpacity
+                              style={[
+                                styles.miniActionChip,
+                                { backgroundColor: theme.btnBg, borderColor: theme.btnBorder },
+                              ]}
+                              onPress={() => onAppendBarsToSection(row.rowIndex, 1)}
+                              activeOpacity={0.7}
+                            >
+                              <Text
+                                style={[
+                                  styles.miniActionText,
+                                  { color: theme.activeKeyBg || '#0284c7' },
+                                ]}
+                              >
+                                + Compás
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[
+                                styles.miniActionChip,
+                                { backgroundColor: theme.btnBg, borderColor: theme.btnBorder },
+                              ]}
+                              onPress={() => onAppendBarsToSection(row.rowIndex, 4)}
+                              activeOpacity={0.7}
+                            >
+                              <Text
+                                style={[
+                                  styles.miniActionText,
+                                  { color: theme.activeKeyBg || '#0284c7' },
+                                ]}
+                              >
+                                +4
+                              </Text>
+                            </TouchableOpacity>
+                          </>
                         )}
-                      </TouchableOpacity>
-                    )}
-                    {row.sectionSign && (
-                      <Text
-                        style={[
-                          styles.sectionSignText,
-                          {
-                            color: theme.textPrimary,
-                            fontSize: Math.round((row.sectionSign === 'coda' ? 42 : 24) * fontScale),
-                            lineHeight: Math.round((row.sectionSign === 'coda' ? 44 : 26) * fontScale),
-                            marginLeft: hasSection ? 6 : 0,
-                          },
-                        ]}
-                      >
-                        {row.sectionSign === 'segno' ? '𝄋' : '𝄌'}
-                      </Text>
+                        {onDuplicateSection && (
+                          <TouchableOpacity
+                            style={[
+                              styles.miniActionChip,
+                              {
+                                backgroundColor: theme.btnBg,
+                                borderColor: theme.btnBorder,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                              },
+                            ]}
+                            onPress={() => onDuplicateSection(row.rowIndex, 'after')}
+                            activeOpacity={0.7}
+                            accessibilityLabel={`Duplicar sección ${sectionDisplayName}`}
+                          >
+                            <Feather
+                              name="copy"
+                              size={11}
+                              color={theme.textPrimary}
+                              style={{ marginRight: 3 }}
+                            />
+                            <Text style={[styles.miniActionText, { color: theme.textPrimary }]}>
+                              Duplicar
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                        {onDeleteSection && song.rows.length > 1 && (
+                          <TouchableOpacity
+                            style={[
+                              styles.miniDeleteChip,
+                              { backgroundColor: '#ef444415', borderColor: '#ef444455' },
+                            ]}
+                            onPress={() => confirmDeleteSection(row.rowIndex, sectionDisplayName)}
+                            activeOpacity={0.7}
+                            accessibilityLabel={`Eliminar sección ${sectionDisplayName}`}
+                          >
+                            <Feather name="trash-2" size={12} color="#ef4444" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     )}
                   </View>
-                )}
+                ) : isEditMode && !row.isDirectionBlockRow && !row.isPreambleBannerRow ? (
+                  /* Continuation row edit controls: allow naming a new section here or deleting this row */
+                  <View style={styles.continuationEditStrip}>
+                    {onEditSection ? (
+                      <TouchableOpacity
+                        style={styles.addSectionTitleHint}
+                        onPress={() => onEditSection(row.rowIndex, '')}
+                        activeOpacity={0.7}
+                      >
+                        <Feather
+                          name="plus"
+                          size={11}
+                          color={theme.textSecondary}
+                          style={{ marginRight: 3 }}
+                        />
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary }}>
+                          Título sección
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <View />
+                    )}
+                    {onDeleteRow && song.rows.length > 1 && (
+                      <TouchableOpacity
+                        style={[
+                          styles.miniDeleteChip,
+                          { backgroundColor: '#ef444412', borderColor: '#ef444444' },
+                        ]}
+                        onPress={() => confirmDeleteRow(row.rowIndex)}
+                        activeOpacity={0.7}
+                      >
+                        <Feather name="trash-2" size={11} color="#ef4444" style={{ marginRight: 3 }} />
+                        <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#ef4444' }}>
+                          Fila
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ) : null}
 
                 {/* Musical Measures Line */}
                 <View
@@ -273,6 +544,43 @@ export const LeadSheetGrid: React.FC<LeadSheetGridProps> = ({
                       const isLast = barIndex === row.bars.length - 1;
 
                       if (!bar) {
+                        // In Edit Mode, turn the immediate next empty slot into a dashed "+ Compás" button!
+                        if (isEditMode && barIndex === row.bars.length && onAppendBarsToRow) {
+                          cells.push(
+                            <TouchableOpacity
+                              key={`add-bar-slot-${barIndex}`}
+                              style={[
+                                styles.addBarSlotBtn,
+                                {
+                                  width: colWidthPercent as any,
+                                  minHeight: Math.max(36, Math.round(66 * fontScale)),
+                                  borderColor: (theme.activeKeyBg || '#0284c7') + '66',
+                                  backgroundColor: (theme.activeKeyBg || '#0284c7') + '0c',
+                                },
+                              ]}
+                              onPress={() => onAppendBarsToRow(row.rowIndex, 1)}
+                              activeOpacity={0.7}
+                            >
+                              <Feather
+                                name="plus"
+                                size={14}
+                                color={theme.activeKeyBg || '#0284c7'}
+                              />
+                              <Text
+                                style={{
+                                  fontSize: 10.5,
+                                  fontWeight: '700',
+                                  color: theme.activeKeyBg || '#0284c7',
+                                  marginTop: 2,
+                                }}
+                              >
+                                Compás
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                          continue;
+                        }
+
                         // Clean whitespace for incomplete rows without fake barlines
                         cells.push(
                           <View
@@ -304,7 +612,7 @@ export const LeadSheetGrid: React.FC<LeadSheetGridProps> = ({
                             theme={theme}
                             fontScale={fontScale}
                             cellWidth={doubleColWidth}
-                            onPressBar={onEditBar}
+                            onPressBar={isEditMode ? onEditBar : undefined}
                             isFirstInRow={isFirst}
                             isLastInRow={isDoubleLast}
                           />
@@ -322,7 +630,9 @@ export const LeadSheetGrid: React.FC<LeadSheetGridProps> = ({
                           theme={theme}
                           fontScale={fontScale}
                           cellWidth={colWidthPercent}
-                          onPressBar={onEditBar}
+                          onPressBar={isEditMode ? onEditBar : undefined}
+                          onEditAnnotation={isEditMode ? onEditAnnotation : undefined}
+                          isEditMode={isEditMode}
                         />
                       );
                     }
@@ -334,18 +644,29 @@ export const LeadSheetGrid: React.FC<LeadSheetGridProps> = ({
                 {rowAnnotations.length > 0 && (
                   <View style={[styles.rowAnnotationsContainer, { marginBottom: rowMarginBottom }]}>
                     {rowAnnotations.map((ann, idx) => (
-                      <Text
+                      <TouchableOpacity
                         key={idx}
-                        style={[
-                          styles.rowAnnotationText,
-                          {
-                            color: theme.annotationColor,
-                            fontSize: Math.round(13.5 * fontScale),
-                          },
-                        ]}
+                        disabled={!isEditMode || !onEditAnnotation}
+                        onPress={
+                          isEditMode && onEditAnnotation
+                            ? () => onEditAnnotation(ann, undefined, row.rowIndex)
+                            : undefined
+                        }
+                        activeOpacity={0.7}
                       >
-                        {ann}
-                      </Text>
+                        <Text
+                          style={[
+                            styles.rowAnnotationText,
+                            {
+                              color: theme.annotationColor,
+                              fontSize: Math.round(13.5 * fontScale),
+                            },
+                            isEditMode && onEditAnnotation && { textDecorationLine: 'underline' },
+                          ]}
+                        >
+                          {ann}
+                        </Text>
+                      </TouchableOpacity>
                     ))}
                   </View>
                 )}
@@ -354,10 +675,98 @@ export const LeadSheetGrid: React.FC<LeadSheetGridProps> = ({
           });
         })()
         )}
+
+        {/* Bottom Song Builder Toolbar (Visible in Edit Mode) */}
+        {isEditMode && song.rows.length > 0 && song.title !== 'Sin Canciones' && (
+          <View
+            style={[
+              styles.bottomBuilderCard,
+              {
+                backgroundColor: theme.cardBackground,
+                borderColor: theme.gridBorder,
+              },
+            ]}
+          >
+            <Text style={[styles.bottomBuilderTitle, { color: theme.textSecondary }]}>
+              AÑADIR AL FINAL DE LA CANCIÓN
+            </Text>
+            <View style={styles.bottomBuilderBtnsRow}>
+              {onAppendBarsToRow && (
+                <>
+                  <TouchableOpacity
+                    style={[
+                      styles.builderBtn,
+                      { backgroundColor: theme.btnBg, borderColor: theme.btnBorder },
+                    ]}
+                    onPress={() => onAppendBarsToRow(song.rows.length - 1, 1)}
+                    activeOpacity={0.7}
+                  >
+                    <Feather
+                      name="plus"
+                      size={14}
+                      color={theme.activeKeyBg || '#0284c7'}
+                      style={{ marginRight: 5 }}
+                    />
+                    <Text style={[styles.builderBtnText, { color: theme.textPrimary }]}>
+                      1 Compás
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.builderBtn,
+                      { backgroundColor: theme.btnBg, borderColor: theme.btnBorder },
+                    ]}
+                    onPress={() => onAppendBarsToRow(song.rows.length - 1, 4)}
+                    activeOpacity={0.7}
+                  >
+                    <Feather
+                      name="plus"
+                      size={14}
+                      color={theme.activeKeyBg || '#0284c7'}
+                      style={{ marginRight: 5 }}
+                    />
+                    <Text style={[styles.builderBtnText, { color: theme.textPrimary }]}>
+                      4 Compases
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {onOpenAddSection && (
+                <TouchableOpacity
+                  style={[
+                    styles.builderBtnPrimary,
+                    { backgroundColor: theme.activeKeyBg || '#0284c7' },
+                  ]}
+                  onPress={onOpenAddSection}
+                  activeOpacity={0.8}
+                >
+                  <Feather
+                    name="plus-square"
+                    size={14}
+                    color={theme.activeKeyText || '#ffffff'}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={[
+                      styles.builderBtnText,
+                      { color: theme.activeKeyText || '#ffffff' },
+                    ]}
+                  >
+                    Nueva Sección
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
       </View>
     </ScrollView>
   );
 };
+
+export const LeadSheetGrid = React.memo(LeadSheetGridInner);
 
 const styles = StyleSheet.create({
   scrollView: {
@@ -475,6 +884,146 @@ const styles = StyleSheet.create({
   },
   emptySampleBtnText: {
     fontSize: 14,
+    fontWeight: '700',
+  },
+  editModeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1.5,
+    borderRadius: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    marginBottom: 12,
+  },
+  editModeBannerText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  editModeBannerSub: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  editBannerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  editHistoryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 7,
+    borderWidth: 1,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+  },
+  editHistoryBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  editRedoIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editHistoryDisabled: {
+    opacity: 0.35,
+  },
+  editModeDoneBtn: {
+    borderRadius: 7,
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+  },
+  editModeDoneBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  rowEditActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  miniActionChip: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  miniActionText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  miniDeleteChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 3.5,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  continuationEditStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 3,
+    paddingHorizontal: 2,
+  },
+  addSectionTitleHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    opacity: 0.7,
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+  },
+  addBarSlotBtn: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderRadius: 6,
+    marginLeft: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomBuilderCard: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  bottomBuilderTitle: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  bottomBuilderBtnsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  builderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 9,
+    borderWidth: 1,
+  },
+  builderBtnPrimary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 9,
+  },
+  builderBtnText: {
+    fontSize: 12.5,
     fontWeight: '700',
   },
 });

@@ -9,18 +9,28 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { ThemeColors } from '../theme/theme';
 
 interface EditSectionModalProps {
   visible: boolean;
+  mode?: 'edit' | 'add';
   theme: ThemeColors;
   fontScale?: number;
   initialLabel: string;
   rowIndex: number;
+  canDeleteSection?: boolean;
   onClose: () => void;
   onSave: (rowIndex: number, newLabel: string) => Promise<void> | void;
+  onAddSection?: (label: string, barCount: number, withRepeat: boolean) => Promise<void> | void;
+  onDuplicateSection?: (
+    rowIndex: number,
+    placement: 'after' | 'end',
+    customLabel?: string
+  ) => Promise<void> | void;
+  onDeleteSection?: (rowIndex: number) => Promise<void> | void;
 }
 
 const SECTION_PRESETS = [
@@ -38,24 +48,34 @@ const SECTION_PRESETS = [
   'Outro',
 ];
 
+const BAR_COUNT_OPTIONS = [2, 4, 8, 12, 16];
+
 export const EditSectionModal: React.FC<EditSectionModalProps> = ({
   visible,
+  mode = 'edit',
   theme,
-  fontScale = 1.0,
   initialLabel,
   rowIndex,
+  canDeleteSection = true,
   onClose,
   onSave,
+  onAddSection,
+  onDuplicateSection,
+  onDeleteSection,
 }) => {
   const [sectionText, setSectionText] = useState(initialLabel);
+  const [barCount, setBarCount] = useState<number>(4);
+  const [withRepeat, setWithRepeat] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (visible) {
-      setSectionText(initialLabel || '');
+      setSectionText(mode === 'add' ? initialLabel || 'Coro' : initialLabel || '');
+      setBarCount(4);
+      setWithRepeat(false);
       setIsSaving(false);
     }
-  }, [visible, initialLabel]);
+  }, [visible, initialLabel, mode]);
 
   const handleSelectPreset = (preset: string) => {
     setSectionText(preset);
@@ -65,11 +85,45 @@ export const EditSectionModal: React.FC<EditSectionModalProps> = ({
     setSectionText('');
   };
 
+  const handleConfirmDeleteSection = () => {
+    if (!onDeleteSection) return;
+    const displayTitle = sectionText.trim() || initialLabel || 'esta sección';
+    if (Platform.OS === 'web') {
+      const ok =
+        typeof window !== 'undefined' &&
+        window.confirm(`¿Eliminar "${displayTitle}" y todos sus compases?`);
+      if (ok) {
+        onDeleteSection(rowIndex);
+        onClose();
+      }
+      return;
+    }
+    Alert.alert(
+      'Eliminar sección',
+      `¿Seguro que deseas eliminar "${displayTitle}" junto con todos sus compases?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: () => {
+            onDeleteSection(rowIndex);
+            onClose();
+          },
+        },
+      ]
+    );
+  };
+
   const handleSave = async () => {
     if (isSaving) return;
     setIsSaving(true);
     try {
-      await onSave(rowIndex, sectionText.trim());
+      if (mode === 'add' && onAddSection) {
+        await onAddSection(sectionText.trim() || 'Sección', barCount, withRepeat);
+      } else {
+        await onSave(rowIndex, sectionText.trim());
+      }
       onClose();
     } finally {
       setIsSaving(false);
@@ -97,21 +151,30 @@ export const EditSectionModal: React.FC<EditSectionModalProps> = ({
                   { backgroundColor: (theme.activeKeyBg || '#0284c7') + '22' },
                 ]}
               >
-                <Feather name="bookmark" size={18} color={theme.activeKeyBg || '#0284c7'} />
+                <Feather
+                  name={mode === 'add' ? 'plus-square' : 'bookmark'}
+                  size={18}
+                  color={theme.activeKeyBg || '#0284c7'}
+                />
               </View>
               <View style={styles.headerTextGroup}>
                 <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>
-                  Editar Sección
+                  {mode === 'add' ? 'Nueva Sección' : 'Editar Sección'}
                 </Text>
                 <Text style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
-                  Personaliza el nombre de esta parte de la canción
+                  {mode === 'add'
+                    ? 'Agrega una nueva parte con sus compases al final'
+                    : 'Personaliza o elimina esta parte de la canción'}
                 </Text>
               </View>
             </View>
 
             <TouchableOpacity
               onPress={onClose}
-              style={[styles.closeBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
+              style={[
+                styles.closeBtn,
+                { backgroundColor: theme.btnBg, borderColor: theme.btnBorder },
+              ]}
               accessibilityRole="button"
               accessibilityLabel="Cerrar modal de sección"
             >
@@ -135,7 +198,10 @@ export const EditSectionModal: React.FC<EditSectionModalProps> = ({
                   <View
                     style={[
                       styles.sectionBadge,
-                      { backgroundColor: (theme.activeKeyBg || '#0284c7') + '18', borderColor: theme.activeKeyBg || '#0284c7' },
+                      {
+                        backgroundColor: (theme.activeKeyBg || '#0284c7') + '18',
+                        borderColor: theme.activeKeyBg || '#0284c7',
+                      },
                     ]}
                   >
                     <Text style={[styles.sectionBadgeText, { color: theme.textPrimary }]}>
@@ -229,45 +295,203 @@ export const EditSectionModal: React.FC<EditSectionModalProps> = ({
                   );
                 })}
 
-                {/* Option to clear section label completely */}
+                {mode === 'edit' && (
+                  <TouchableOpacity
+                    style={[
+                      styles.presetChip,
+                      styles.removeChip,
+                      {
+                        backgroundColor: sectionText.trim() === '' ? '#ef444422' : theme.btnBg,
+                        borderColor: sectionText.trim() === '' ? '#ef4444' : theme.btnBorder,
+                      },
+                    ]}
+                    onPress={handleClear}
+                    activeOpacity={0.7}
+                  >
+                    <Feather
+                      name="eye-off"
+                      size={13}
+                      color={sectionText.trim() === '' ? '#ef4444' : theme.textSecondary}
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text
+                      style={[
+                        styles.presetChipText,
+                        {
+                          color: sectionText.trim() === '' ? '#ef4444' : theme.textSecondary,
+                          fontWeight: sectionText.trim() === '' ? '700' : '500',
+                        },
+                      ]}
+                    >
+                      Quitar solo título
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Add mode: Measure count & Repeat toggle */}
+            {mode === 'add' && (
+              <View style={styles.sectionBlock}>
+                <Text style={[styles.sectionHeading, { color: theme.textSecondary }]}>
+                  CANTIDAD INICIAL DE COMPASES
+                </Text>
+                <View style={styles.presetsGrid}>
+                  {BAR_COUNT_OPTIONS.map((cnt) => {
+                    const active = barCount === cnt;
+                    return (
+                      <TouchableOpacity
+                        key={`cnt-${cnt}`}
+                        style={[
+                          styles.presetChip,
+                          {
+                            backgroundColor: active
+                              ? theme.activeKeyBg || '#0284c7'
+                              : theme.btnBg,
+                            borderColor: active
+                              ? theme.activeKeyBg || '#0284c7'
+                              : theme.btnBorder,
+                            minWidth: 56,
+                            alignItems: 'center',
+                          },
+                        ]}
+                        onPress={() => setBarCount(cnt)}
+                      >
+                        <Text
+                          style={[
+                            styles.presetChipText,
+                            {
+                              color: active
+                                ? theme.activeKeyText || '#ffffff'
+                                : theme.textPrimary,
+                              fontWeight: '700',
+                            },
+                          ]}
+                        >
+                          {cnt} compases
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
                 <TouchableOpacity
                   style={[
-                    styles.presetChip,
-                    styles.removeChip,
+                    styles.repeatToggleRow,
                     {
-                      backgroundColor: sectionText.trim() === '' ? '#ef444422' : theme.btnBg,
-                      borderColor: sectionText.trim() === '' ? '#ef4444' : theme.btnBorder,
+                      backgroundColor: withRepeat
+                        ? (theme.activeKeyBg || '#0284c7') + '18'
+                        : theme.btnBg,
+                      borderColor: withRepeat
+                        ? theme.activeKeyBg || '#0284c7'
+                        : theme.btnBorder,
                     },
                   ]}
-                  onPress={handleClear}
+                  onPress={() => setWithRepeat((p) => !p)}
                   activeOpacity={0.7}
                 >
                   <Feather
-                    name="trash-2"
-                    size={13}
-                    color={sectionText.trim() === '' ? '#ef4444' : theme.textSecondary}
-                    style={{ marginRight: 4 }}
+                    name={withRepeat ? 'check-square' : 'square'}
+                    size={16}
+                    color={withRepeat ? theme.activeKeyBg || '#0284c7' : theme.textSecondary}
+                    style={{ marginRight: 8 }}
                   />
-                  <Text
-                    style={[
-                      styles.presetChipText,
-                      {
-                        color: sectionText.trim() === '' ? '#ef4444' : theme.textSecondary,
-                        fontWeight: sectionText.trim() === '' ? '700' : '500',
-                      },
-                    ]}
-                  >
-                    Quitar sección
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textPrimary }}>
+                    Envolver con barras de repetición ( ||:  :|| )
                   </Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            )}
+
+            {/* Edit mode: Duplicate entire section */}
+            {mode === 'edit' && onDuplicateSection && (
+              <View style={styles.sectionBlock}>
+                <Text style={[styles.sectionHeading, { color: theme.textSecondary }]}>
+                  DUPLICAR SECCIÓN (CON SUS ACORDES)
+                </Text>
+                <View style={styles.duplicateBtnsRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.duplicateSectionBtn,
+                      { backgroundColor: theme.btnBg, borderColor: theme.btnBorder },
+                    ]}
+                    onPress={async () => {
+                      await onDuplicateSection(
+                        rowIndex,
+                        'after',
+                        sectionText.trim() || initialLabel || undefined
+                      );
+                      onClose();
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Feather
+                      name="copy"
+                      size={14}
+                      color={theme.activeKeyBg || '#0284c7'}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={[styles.duplicateSectionBtnText, { color: theme.textPrimary }]}>
+                      Duplicar debajo
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.duplicateSectionBtn,
+                      { backgroundColor: theme.btnBg, borderColor: theme.btnBorder },
+                    ]}
+                    onPress={async () => {
+                      await onDuplicateSection(
+                        rowIndex,
+                        'end',
+                        sectionText.trim() || initialLabel || undefined
+                      );
+                      onClose();
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Feather
+                      name="corner-right-down"
+                      size={14}
+                      color={theme.activeKeyBg || '#0284c7'}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={[styles.duplicateSectionBtnText, { color: theme.textPrimary }]}>
+                      Duplicar al final
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Edit mode: Delete entire section */}
+            {mode === 'edit' && onDeleteSection && canDeleteSection && (
+              <View style={[styles.sectionBlock, { marginTop: 4 }]}>
+                <TouchableOpacity
+                  style={[
+                    styles.deleteSectionBtn,
+                    { backgroundColor: '#ef444415', borderColor: '#ef444466' },
+                  ]}
+                  onPress={handleConfirmDeleteSection}
+                  activeOpacity={0.7}
+                >
+                  <Feather name="trash-2" size={15} color="#ef4444" style={{ marginRight: 7 }} />
+                  <Text style={styles.deleteSectionBtnText}>
+                    Eliminar toda esta sección (compases incluidos)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </ScrollView>
 
           {/* Footer Actions */}
           <View style={[styles.footer, { borderTopColor: theme.modalBorder }]}>
             <TouchableOpacity
-              style={[styles.cancelBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
+              style={[
+                styles.cancelBtn,
+                { backgroundColor: theme.btnBg, borderColor: theme.btnBorder },
+              ]}
               onPress={onClose}
               activeOpacity={0.7}
             >
@@ -284,8 +508,15 @@ export const EditSectionModal: React.FC<EditSectionModalProps> = ({
               disabled={isSaving}
               activeOpacity={0.8}
             >
-              <Feather name="check" size={17} color="#ffffff" style={{ marginRight: 6 }} />
-              <Text style={styles.saveBtnText}>Guardar Sección</Text>
+              <Feather
+                name={mode === 'add' ? 'plus' : 'check'}
+                size={17}
+                color="#ffffff"
+                style={{ marginRight: 6 }}
+              />
+              <Text style={styles.saveBtnText}>
+                {mode === 'add' ? 'Añadir Sección' : 'Guardar Sección'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -304,7 +535,7 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 480,
-    maxHeight: '85%',
+    maxHeight: '88%',
     borderRadius: 16,
     borderWidth: 1,
     overflow: 'hidden',
@@ -363,7 +594,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   previewLabel: {
     fontSize: 10.5,
@@ -392,7 +623,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   sectionBlock: {
-    marginBottom: 16,
+    marginBottom: 15,
   },
   sectionHeading: {
     fontSize: 11,
@@ -432,6 +663,47 @@ const styles = StyleSheet.create({
   removeChip: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  repeatToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 9,
+    borderWidth: 1,
+  },
+  deleteSectionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 9,
+    borderWidth: 1,
+  },
+  duplicateBtnsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  duplicateSectionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 9,
+    borderWidth: 1,
+  },
+  duplicateSectionBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  deleteSectionBtnText: {
+    color: '#ef4444',
+    fontSize: 13,
+    fontWeight: '700',
   },
   footer: {
     flexDirection: 'row',

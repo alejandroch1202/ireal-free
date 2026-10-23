@@ -1,4 +1,4 @@
-import { Vibration, Platform } from 'react-native';
+import { Platform } from 'react-native';
 
 /**
  * Generates an in-memory base64 WAV sound of a musical metronome click.
@@ -62,8 +62,7 @@ function createClickWavDataUri(freq: number, durationMs: number): string {
   return `data:audio/wav;base64,${base64}`;
 }
 
-const HIGH_CLICK_URI = createClickWavDataUri(1100, 30);
-const LOW_CLICK_URI = createClickWavDataUri(680, 22);
+const CLICK_URI = createClickWavDataUri(980, 24);
 
 // Safely load expo-audio if available in Expo Go / native build
 let ExpoAudio: typeof import('expo-audio') | null = null;
@@ -74,46 +73,68 @@ try {
 }
 
 class SoundManager {
-  private highPlayer: any = null;
-  private lowPlayer: any = null;
+  private clickPlayer: any = null;
   private isLoaded = false;
   private isLoading = false;
+  private webAudioCtx: any = null;
 
   private initAudio() {
-    if (this.isLoaded || this.isLoading || !ExpoAudio?.createAudioPlayer) return;
+    if (this.isLoaded || this.isLoading) return;
     this.isLoading = true;
 
     try {
-      this.highPlayer = ExpoAudio.createAudioPlayer({ uri: HIGH_CLICK_URI });
-      this.lowPlayer = ExpoAudio.createAudioPlayer({ uri: LOW_CLICK_URI });
-      this.isLoaded = true;
+      if (ExpoAudio?.createAudioPlayer) {
+        this.clickPlayer = ExpoAudio.createAudioPlayer({ uri: CLICK_URI });
+        this.isLoaded = true;
+      }
     } catch {
-      // Fallback to haptics if audio initialization fails
+      // Fallback
     } finally {
       this.isLoading = false;
     }
   }
 
-  async playClick(isFirstBeat: boolean): Promise<void> {
+  async playClick(_isFirstBeat?: boolean): Promise<void> {
     try {
       if (Platform.OS !== 'web') {
-        // Physical tactile pulse on device
-        const vibDuration = isFirstBeat ? 20 : 10;
-        Vibration.vibrate(vibDuration);
-
-        // Sound click via expo-audio
+        // Sound click via expo-audio (unified sound across all beats, no vibration)
         if (!this.isLoaded && !this.isLoading) {
           this.initAudio();
         }
 
-        const player = isFirstBeat ? this.highPlayer : this.lowPlayer;
-        if (player) {
+        if (this.clickPlayer) {
           try {
-            await player.seekTo(0);
-            player.play();
+            await this.clickPlayer.seekTo(0);
+            this.clickPlayer.play();
           } catch {
             // ignore seek/play race conditions
           }
+        }
+      } else {
+        // Web Audio synthetic click fallback for testing in browser
+        try {
+          const AudioContextClass =
+            (window as any).AudioContext || (window as any).webkitAudioContext;
+          if (AudioContextClass) {
+            if (!this.webAudioCtx) {
+              this.webAudioCtx = new AudioContextClass();
+            }
+            if (this.webAudioCtx.state === 'suspended') {
+              this.webAudioCtx.resume();
+            }
+            const osc = this.webAudioCtx.createOscillator();
+            const gain = this.webAudioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(980, this.webAudioCtx.currentTime);
+            gain.gain.setValueAtTime(0.3, this.webAudioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, this.webAudioCtx.currentTime + 0.035);
+            osc.connect(gain);
+            gain.connect(this.webAudioCtx.destination);
+            osc.start();
+            osc.stop(this.webAudioCtx.currentTime + 0.04);
+          }
+        } catch {
+          // ignore web audio errors
         }
       }
     } catch {
@@ -123,16 +144,15 @@ class SoundManager {
 
   async cleanup(): Promise<void> {
     try {
-      if (Platform.OS !== 'web') {
-        Vibration.cancel();
+      if (this.clickPlayer?.remove) this.clickPlayer.remove();
+      if (this.webAudioCtx && this.webAudioCtx.close) {
+        this.webAudioCtx.close().catch(() => {});
+        this.webAudioCtx = null;
       }
-      if (this.highPlayer?.remove) this.highPlayer.remove();
-      if (this.lowPlayer?.remove) this.lowPlayer.remove();
     } catch {
       // ignore
     }
-    this.highPlayer = null;
-    this.lowPlayer = null;
+    this.clickPlayer = null;
     this.isLoaded = false;
   }
 }

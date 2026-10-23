@@ -72,7 +72,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ visible, onClose, theme 
               <Text style={[styles.appName, { color: theme.textPrimary }]}>iReal Free</Text>
 
               <View style={styles.versionBadge}>
-                <Text style={styles.versionText}>v1.0.0</Text>
+                <Text style={styles.versionText}>v1.0.1</Text>
               </View>
 
               <Text style={[styles.appTagline, { color: descColor }]}>

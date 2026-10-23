@@ -38,9 +38,13 @@ interface SheetSettingsModalProps {
   onShareSong: () => void;
   onOpenPlaylists: () => void;
   onOpenImport: () => void;
+  onOpenCreateSong?: () => void;
+  onDuplicateCurrentSong?: () => void;
   onDeleteCurrentSong?: () => void;
   onOpenEditSong?: () => void;
   onExportAllSongs?: () => void;
+  isEditMode?: boolean;
+  onToggleEditMode?: () => void;
 }
 
 const FONT_PRESETS = [
@@ -72,9 +76,13 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
   onShareSong,
   onOpenPlaylists,
   onOpenImport,
+  onOpenCreateSong,
+  onDuplicateCurrentSong,
   onDeleteCurrentSong,
   onOpenEditSong,
   onExportAllSongs,
+  isEditMode = false,
+  onToggleEditMode,
 }) => {
   const isTransposed = song.transposeAmount !== 0;
   const currentRoot = getKeyRoot(song.currentKey);
@@ -115,12 +123,13 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
-    >
+    <>
+      <Modal
+        visible={visible && !showAboutModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={onClose}
+      >
       <View style={[styles.overlay, { backgroundColor: theme.modalOverlay }]}>
         <View
           style={[
@@ -243,7 +252,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
               </View>
 
               {/* Botón para editar tono original y metadatos */}
-              {onOpenEditSong && (
+              {onOpenEditSong && song.title !== 'Sin Canciones' && (
                 <TouchableOpacity
                   style={[
                     styles.editSongInfoBtn,
@@ -262,27 +271,55 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                 </TouchableOpacity>
               )}
 
-              {/* Botón e indicación para editar acordes */}
-              <TouchableOpacity
-                style={[
-                  styles.editSongInfoBtn,
-                  { backgroundColor: theme.btnBg, borderColor: theme.btnBorder, marginTop: 8 },
-                ]}
-                onPress={() => {
-                  onClose();
-                  if (Platform.OS === 'android') {
-                    ToastAndroid.show('Toca cualquier compás en la partitura para editar sus acordes', ToastAndroid.LONG);
-                  } else {
-                    Alert.alert('Editar Acordes', 'Toca directamente cualquier compás o acorde en la partitura para modificarlo, sustituirlo o añadir nuevos acordes.');
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <Feather name="music" size={14} color={theme.activeKeyBg || '#0284c7'} />
-                <Text style={[styles.editSongInfoText, { color: theme.textPrimary }]}>
-                  Editar Acordes (Toca un compás)
-                </Text>
-              </TouchableOpacity>
+              {/* Botón directo para activar/desactivar Modo Edición de acordes y secciones */}
+              {onToggleEditMode && song.title !== 'Sin Canciones' && (
+                <TouchableOpacity
+                  style={[
+                    styles.editSongInfoBtn,
+                    {
+                      backgroundColor: isEditMode
+                        ? (theme.activeKeyBg || '#0284c7') + '18'
+                        : theme.btnBg,
+                      borderColor: isEditMode
+                        ? theme.activeKeyBg || '#0284c7'
+                        : theme.btnBorder,
+                      marginTop: 8,
+                    },
+                  ]}
+                  onPress={() => {
+                    const willEnable = !isEditMode;
+                    onToggleEditMode();
+                    onClose();
+                    if (willEnable && Platform.OS === 'android') {
+                      ToastAndroid.show(
+                        'Modo Edición activado: toca cualquier compás para editarlo',
+                        ToastAndroid.SHORT
+                      );
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Feather
+                    name="edit-3"
+                    size={14}
+                    color={theme.activeKeyBg || '#0284c7'}
+                  />
+                  <Text
+                    style={[
+                      styles.editSongInfoText,
+                      {
+                        color: isEditMode
+                          ? theme.activeKeyBg || '#0284c7'
+                          : theme.textPrimary,
+                      },
+                    ]}
+                  >
+                    {isEditMode
+                      ? 'Salir del Modo Edición'
+                      : 'Editar Acordes y Secciones'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* 2. Tamaño de Letra y Partitura */}
@@ -561,6 +598,29 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                   </TouchableOpacity>
                 )}
 
+                {/* Duplicate Current Song */}
+                {onDuplicateCurrentSong && song.title !== 'Sin Canciones' && (
+                  <TouchableOpacity
+                    style={[styles.actionRowBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
+                    onPress={() => {
+                      onClose();
+                      onDuplicateCurrentSong();
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="copy" size={17} color={theme.textPrimary} />
+                    <View style={styles.actionRowTextCol}>
+                      <Text style={[styles.actionRowTitle, { color: theme.textPrimary }]}>
+                        Duplicar Canción
+                      </Text>
+                      <Text style={[styles.actionRowDesc, { color: descColor }]}>
+                        Crea una copia independiente (Copia) para otro arreglo o tono
+                      </Text>
+                    </View>
+                    <Feather name="chevron-right" size={18} color={theme.textSecondary} />
+                  </TouchableOpacity>
+                )}
+
                 {/* Export All Songs (Mass Backup) */}
                 {onExportAllSongs && (
                   <TouchableOpacity
@@ -578,6 +638,58 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                       </Text>
                       <Text style={[styles.actionRowDesc, { color: descColor }]}>
                         Crea un respaldo de todas tus canciones en un solo archivo .html
+                      </Text>
+                    </View>
+                    <Feather name="chevron-right" size={18} color={theme.textSecondary} />
+                  </TouchableOpacity>
+                )}
+
+                {/* Create New Song */}
+                {onOpenCreateSong && (
+                  <TouchableOpacity
+                    style={[styles.actionRowBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
+                    onPress={() => {
+                      onClose();
+                      onOpenCreateSong();
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="file-plus" size={17} color={theme.activeKeyBg || '#0284c7'} />
+                    <View style={styles.actionRowTextCol}>
+                      <Text style={[styles.actionRowTitle, { color: theme.textPrimary }]}>
+                        Crear Nueva Canción
+                      </Text>
+                      <Text style={[styles.actionRowDesc, { color: descColor }]}>
+                        Diseña una partitura en blanco desde cero y añade acordes
+                      </Text>
+                    </View>
+                    <Feather name="chevron-right" size={18} color={theme.textSecondary} />
+                  </TouchableOpacity>
+                )}
+
+                {/* Toggle Edit Mode */}
+                {onToggleEditMode && song.title !== 'Sin Canciones' && (
+                  <TouchableOpacity
+                    style={[styles.actionRowBtn, { backgroundColor: theme.btnBg, borderColor: theme.btnBorder }]}
+                    onPress={() => {
+                      onClose();
+                      onToggleEditMode();
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Feather
+                      name="edit-3"
+                      size={17}
+                      color={isEditMode ? theme.activeKeyBg || '#0284c7' : theme.textPrimary}
+                    />
+                    <View style={styles.actionRowTextCol}>
+                      <Text style={[styles.actionRowTitle, { color: theme.textPrimary }]}>
+                        {isEditMode ? 'Desactivar Modo Edición' : 'Activar Modo Edición'}
+                      </Text>
+                      <Text style={[styles.actionRowDesc, { color: descColor }]}>
+                        {isEditMode
+                          ? 'Modo edición activo: toca cualquier compás para modificarlo'
+                          : 'Permite editar compases, encabezados y anotaciones'}
                       </Text>
                     </View>
                     <Feather name="chevron-right" size={18} color={theme.textSecondary} />
@@ -681,7 +793,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
                     Acerca de iReal Free
                   </Text>
                   <Text style={[styles.actionRowDesc, { color: descColor }]}>
-                    Versión 1.0.0 • Desarrollado por alejandroch.com
+                    Versión 1.0.1 • Desarrollado por alejandroch.com
                   </Text>
                 </View>
                 <Feather name="chevron-right" size={18} color={theme.textSecondary} />
@@ -691,7 +803,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
             {/* Footer */}
             <View style={styles.modalFooter}>
               <Text style={[styles.modalFooterText, { color: descColor }]}>
-                iReal Free v1.0.0
+                iReal Free v1.0.1
               </Text>
               <TouchableOpacity
                 style={{ flexDirection: 'row', alignItems: 'center' }}
@@ -707,6 +819,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
           </ScrollView>
         </View>
       </View>
+      </Modal>
 
       {/* About Modal Dialog */}
       <AboutModal
@@ -714,7 +827,7 @@ export const SheetSettingsModal: React.FC<SheetSettingsModalProps> = ({
         onClose={() => setShowAboutModal(false)}
         theme={theme}
       />
-    </Modal>
+    </>
   );
 };
 

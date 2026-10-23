@@ -22,6 +22,16 @@ test('ensureIRealScheme handles URLs and raw strings', () => {
     ensureIRealScheme('Song=Composer'),
     'irealb://Song=Composer'
   );
+  // Encodes raw spaces, '#' (sharp keys/chords), and brackets even when irealb:// is already present
+  assert.equal(
+    ensureIRealScheme('irealb://Cancion #1=Autor==Pop=F#-=0=[*i F#- | C#- ]'),
+    'irealb://Cancion%20%231=Autor==Pop=F%23-=0=%5B*i%20F%23-%20%7C%20C%23-%20%5D'
+  );
+});
+
+test('buildIRealHtml escapes HTML special characters in title and composer', () => {
+  const result = buildIRealHtml('Canción <En Vivo> & #1', 'Autor "A"', 'irealb://Test=Autor');
+  assert.ok(result.includes('Canción &lt;En Vivo&gt; &amp; #1</a> - Autor &quot;A&quot;'));
 });
 
 test('buildIRealHtml preserves existing full HTML documents', () => {
